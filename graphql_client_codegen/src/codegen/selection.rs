@@ -28,6 +28,7 @@ pub(crate) fn render_response_data_fields<'a>(
     let mut expanded_selection = ExpandedSelection {
         query,
         types: Vec::with_capacity(8),
+        aliases: Vec::new(),
         variants: Vec::new(),
         fields: Vec::with_capacity(operation.selection_set.len()),
         options,
@@ -56,6 +57,7 @@ pub(super) fn render_fragment<'a>(
     let fragment = query.query.get_fragment(fragment_id);
     let mut expanded_selection = ExpandedSelection {
         query,
+        aliases: Vec::new(),
         types: Vec::with_capacity(8),
         variants: Vec::new(),
         fields: Vec::with_capacity(fragment.selection_set.len()),
@@ -124,6 +126,22 @@ fn calculate_selection<'a>(
     type_id: TypeId,
     options: &'a GraphQLClientCodegenOptions,
 ) {
+    // If the selection only contains a fragment, replace the selection with
+    // that fragment.
+    if selection_set.len() == 1 {
+        if let Selection::FragmentSpread(fragment_id) =
+            context.query.query.get_selection(selection_set[0])
+        {
+            let fragment = context.query.query.get_fragment(*fragment_id);
+            context.push_type_alias(TypeAlias {
+                name: &fragment.name,
+                struct_id,
+                boxed: fragment_is_recursive(*fragment_id, context.query.query),
+            });
+            return;
+        }
+    }
+
     // If we are on a union or an interface, we need to generate an enum that matches the variants _exhaustively_.
     {
         let variants: Option<Cow<'_, [TypeId]>> = match type_id {
@@ -334,6 +352,12 @@ fn calculate_selection<'a>(
 #[derive(Clone, Copy, PartialEq)]
 struct ResponseTypeId(u32);
 
+struct TypeAlias<'a> {
+    name: &'a str,
+    struct_id: ResponseTypeId,
+    boxed: bool,
+}
+
 struct ExpandedField<'a> {
     graphql_name: Option<&'a str>,
     rust_name: Cow<'a, str>,
@@ -418,6 +442,7 @@ pub(crate) struct ExpandedSelection<'a> {
     types: Vec<ExpandedType<'a>>,
     fields: Vec<ExpandedField<'a>>,
     variants: Vec<ExpandedVariant<'a>>,
+    aliases: Vec<TypeAlias<'a>>,
     options: &'a GraphQLClientCodegenOptions,
 }
 
@@ -435,6 +460,10 @@ impl<'a> ExpandedSelection<'a> {
 
     fn push_field(&mut self, field: ExpandedField<'a>) {
         self.fields.push(field);
+    }
+
+    fn push_type_alias(&mut self, alias: TypeAlias<'a>) {
+        self.aliases.push(alias)
     }
 
     fn push_variant(&mut self, variant: ExpandedVariant<'a>) {
@@ -464,6 +493,22 @@ impl<'a> ExpandedSelection<'a> {
 
         for (type_id, ty) in self.types() {
             let struct_name = Ident::new(&ty.name, Span::call_site());
+
+            // If the type is aliased, stop here.
+            if let Some(alias) = self.aliases.iter().find(|alias| alias.struct_id == type_id) {
+                let fragment_name = Ident::new(&alias.name, Span::call_site());
+                let fragment_name = if alias.boxed {
+                    quote!(Box<#fragment_name>)
+                } else {
+                    quote!(#fragment_name)
+                };
+                let item = quote! {
+                    pub type #struct_name = #fragment_name;
+                };
+                items.push(item);
+                continue;
+            }
+
             let mut fields = self
                 .fields
                 .iter()
