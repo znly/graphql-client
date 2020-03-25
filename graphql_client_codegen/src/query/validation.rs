@@ -1,3 +1,6 @@
+use super::{full_path_prefix, BoundQuery, Query, Selection, SelectionId};
+use crate::schema::TypeId;
+
 pub(super) fn validate_typename_presence(query: &BoundQuery<'_>) -> anyhow::Result<()> {
     for fragment in query.query.fragments.iter() {
         let type_id = match fragment.on {
