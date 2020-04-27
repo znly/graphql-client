@@ -1,14 +1,17 @@
-use crate::fragments::GqlFragment;
-use crate::operations::Operation;
-use crate::query::QueryContext;
-use crate::schema;
-use crate::selection::Selection;
+use crate::{
+    fragments::GqlFragment, operations::Operation, query::QueryContext, schema,
+    selection::Selection, TargetLang,
+};
 use failure::*;
 use graphql_parser::query;
 use proc_macro2::TokenStream;
 use quote::*;
 
-/// Selects the first operation matching `struct_name`. Returns `None` when the query document defines no operation, or when the selected operation does not match any defined operation.
+// -----------------------------------------------------------------------------
+
+/// Selects the first operation matching `struct_name`. Returns `None` when the
+/// query document defines no operation, or when the selected operation does not
+/// match any defined operation.
 pub(crate) fn select_operation<'query>(
     query: &'query query::Document,
     struct_name: &str,
@@ -42,6 +45,8 @@ pub(crate) fn all_operations(query: &query::Document) -> Vec<Operation<'_>> {
     }
     operations
 }
+
+// -----------------------------------------------------------------------------
 
 /// The main code generation function.
 pub(crate) fn response_for_query(
@@ -104,30 +109,52 @@ pub(crate) fn response_for_query(
             ))?
         }
 
-        definitions.extend(definition.field_impls_for_selection(&context, &selection, &prefix)?);
-        definition.response_fields_for_selection(&context, &selection, &prefix)?
+        definitions.extend(definition.field_impls_for_selection(
+            &options.target_lang,
+            &context,
+            &selection,
+            &prefix,
+        )?);
+        definition.response_fields_for_selection(
+            &options.target_lang,
+            &context,
+            &selection,
+            &prefix,
+        )?
     };
 
-    let enum_definitions = context.schema.enums.values().filter_map(|enm| {
-        if enm.is_required.get() {
-            Some(enm.to_rust(&context))
-        } else {
-            None
-        }
-    });
+    let enum_definitions: Vec<TokenStream> = context
+        .schema
+        .enums
+        .values()
+        .filter_map(|enm| {
+            if enm.is_required.get() {
+                Some(match options.target_lang {
+                    TargetLang::Rust => enm.to_rust(&context),
+                    TargetLang::Go => enm.to_go(&context),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
     let fragment_definitions: Result<Vec<TokenStream>, _> = context
         .fragments
         .values()
         .filter_map(|fragment| {
             if fragment.is_required.get() {
-                Some(fragment.to_rust(&context))
+                Some(match options.target_lang {
+                    TargetLang::Rust => fragment.to_rust(&context),
+                    TargetLang::Go => fragment.to_go(&context),
+                })
             } else {
                 None
             }
         })
         .collect();
     let fragment_definitions = fragment_definitions?;
-    let variables_struct = operation.expand_variables(&context);
+
+    let variables_struct = operation.expand_variables(&context, &options.target_lang);
 
     let input_object_definitions: Result<Vec<TokenStream>, _> = context
         .schema
@@ -135,7 +162,10 @@ pub(crate) fn response_for_query(
         .values()
         .filter_map(|i| {
             if i.is_required.get() {
-                Some(i.to_rust(&context))
+                Some(match options.target_lang {
+                    TargetLang::Rust => i.to_rust(&context),
+                    TargetLang::Go => i.to_go(&context),
+                })
             } else {
                 None
             }
@@ -149,7 +179,10 @@ pub(crate) fn response_for_query(
         .values()
         .filter_map(|s| {
             if s.is_required.get() {
-                Some(s.to_rust())
+                Some(match options.target_lang {
+                    TargetLang::Rust => s.to_rust(),
+                    TargetLang::Go => s.to_go(),
+                })
             } else {
                 None
             }
@@ -158,35 +191,62 @@ pub(crate) fn response_for_query(
 
     let response_derives = context.response_derives();
 
-    Ok(quote! {
-        use serde::{Serialize, Deserialize};
+    match options.target_lang {
+        TargetLang::Rust => Ok(quote! {
+            use serde::{Serialize, Deserialize};
 
-        #[allow(dead_code)]
-        type Boolean = bool;
-        #[allow(dead_code)]
-        type Float = f64;
-        #[allow(dead_code)]
-        type Int = i64;
-        #[allow(dead_code)]
-        type ID = String;
+            #[allow(dead_code)]
+            type Boolean = bool;
+            #[allow(dead_code)]
+            type Float = f64;
+            #[allow(dead_code)]
+            type Int = i64;
+            #[allow(dead_code)]
+            type ID = String;
 
-        #(#scalar_definitions)*
+            #(#scalar_definitions)*
 
-        #(#input_object_definitions)*
+            #(#input_object_definitions)*
 
-        #(#enum_definitions)*
+            #(#enum_definitions)*
 
-        #(#fragment_definitions)*
+            #(#fragment_definitions)*
 
-        #(#definitions)*
+            #(#definitions)*
 
-        #variables_struct
+            #variables_struct
 
-        #response_derives
+            #response_derives
 
-        pub struct ResponseData {
-            #(#response_data_fields,)*
-        }
+            pub struct ResponseData {
+                #(#response_data_fields,)*
+            }
+        }),
+        TargetLang::Go => Ok(quote! {
+            type Boolean = bool;
+            type Float = float64;
+            type Int = int64;
+            type String = string;
+            type ID = string;
 
-    })
+            #(#scalar_definitions;)*
+
+            #(#input_object_definitions;)*
+
+            #(#enum_definitions;)*
+
+            #(#fragment_definitions;)*
+
+            #(#definitions;)*
+
+            #variables_struct;
+
+            type ResponseData struct {
+                #(#response_data_fields;)*
+            };
+            func (resp *ResponseData) UnmarshalGQL(buf []byte) error {
+                return errors.WithStack(json.Unmarshal(buf, resp));
+            };
+        }),
+    }
 }

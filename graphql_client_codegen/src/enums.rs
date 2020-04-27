@@ -20,12 +20,13 @@ pub struct GqlEnum<'schema> {
 
 impl<'schema> GqlEnum<'schema> {
     /**
-     * About rust keyword escaping: variant_names and constructors must be escaped,
-     * variant_str not.
-     * Example schema:                  enum AnEnum { where \n self }
-     * Generated "variant_names" enum:  pub enum AnEnum { where_, self_, Other(String), }
-     * Generated serialize line: "AnEnum::where_ => "where","
-     */
+     ** About rust keyword escaping: variant_names and constructors must be
+     ** escaped, variant_str not.
+     ** Example schema:                  enum AnEnum { where \n self }
+     ** Generated "variant_names" enum:  pub enum AnEnum { where_, self_,
+     ** Other(String), } Generated serialize line: "AnEnum::where_ =>
+     ** "where","
+     **/
     pub(crate) fn to_rust(
         &self,
         query_context: &crate::query::QueryContext<'_, '_>,
@@ -104,6 +105,24 @@ impl<'schema> GqlEnum<'schema> {
                     }
                 }
             }
+        }
+    }
+
+    pub(crate) fn to_go(&self, _: &crate::query::QueryContext<'_, '_>) -> TokenStream {
+        let name_ident = format!("{}{}", ENUMS_PREFIX, self.name);
+        let name_ident = Ident::new(&name_ident, Span::call_site());
+        let variants = self.variants.iter().map(|v| {
+            let i = Ident::new(v.name, Span::call_site());
+            let name = v.name;
+            quote!(#i #name_ident = #name)
+        });
+
+        quote! {
+            type #name_ident String;
+
+            const (
+                #(#variants;)*
+            )
         }
     }
 }

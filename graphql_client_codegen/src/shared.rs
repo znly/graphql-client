@@ -1,7 +1,10 @@
-use crate::deprecation::{DeprecationStatus, DeprecationStrategy};
-use crate::objects::GqlObjectField;
-use crate::query::QueryContext;
-use crate::selection::*;
+use crate::{
+    deprecation::{DeprecationStatus, DeprecationStrategy},
+    objects::GqlObjectField,
+    query::QueryContext,
+    selection::*,
+    TargetLang,
+};
 use failure::*;
 use heck::{CamelCase, SnakeCase};
 use proc_macro2::{Ident, Span, TokenStream};
@@ -78,6 +81,7 @@ pub(crate) fn keyword_replace(needle: &str) -> String {
 }
 
 pub(crate) fn render_object_field(
+    target_lang: &TargetLang,
     field_name: &str,
     field_type: &TokenStream,
     description: Option<&str>,
@@ -105,14 +109,24 @@ pub(crate) fn render_object_field(
     };
 
     let description = description.map(|s| quote!(#[doc = #s]));
-    let rust_safe_field_name = keyword_replace(&field_name.to_snake_case());
-    let name_ident = Ident::new(&rust_safe_field_name, Span::call_site());
-    let rename = crate::shared::field_rename_annotation(&field_name, &rust_safe_field_name);
+    let name = match target_lang {
+        TargetLang::Rust => keyword_replace(&field_name.to_snake_case()),
+        TargetLang::Go => field_name.to_camel_case(),
+    };
+    let name_ident = Ident::new(&name, Span::call_site());
+    let rename = crate::shared::field_rename_annotation(&field_name, &name);
 
-    Some(quote!(#description #deprecation #rename pub #name_ident: #field_type))
+    let raw_name = Ident::new(field_name, Span::call_site());
+    match target_lang {
+        TargetLang::Rust => {
+            Some(quote!(#description #deprecation #rename pub #name_ident: #field_type))
+        }
+        TargetLang::Go => Some(quote!(#name_ident #field_type __JSON_TAGS(#raw_name))),
+    }
 }
 
 pub(crate) fn field_impls_for_selection(
+    target_lang: &TargetLang,
     fields: &[GqlObjectField<'_>],
     context: &QueryContext<'_, '_>,
     selection: &Selection<'_>,
@@ -132,7 +146,7 @@ pub(crate) fn field_impls_for_selection(
                     .type_
                     .inner_name_str();
                 let prefix = format!("{}{}", prefix.to_camel_case(), alias.to_camel_case());
-                context.maybe_expand_field(&ty, &selected.fields, &prefix)
+                context.maybe_expand_field(target_lang, &ty, &selected.fields, &prefix)
             } else {
                 Ok(None)
             }
@@ -142,6 +156,7 @@ pub(crate) fn field_impls_for_selection(
 }
 
 pub(crate) fn response_fields_for_selection(
+    target_lang: &TargetLang,
     type_name: &str,
     schema_fields: &[GqlObjectField<'_>],
     context: &QueryContext<'_, '_>,
@@ -174,12 +189,20 @@ pub(crate) fn response_fields_for_selection(
                                 .trim_end_matches(", ")
                         )
                     })?;
-                let ty = schema_field.type_.to_rust(
-                    context,
-                    &format!("{}{}", prefix.to_camel_case(), alias.to_camel_case()),
-                );
+
+                let ty = match target_lang {
+                    TargetLang::Rust => schema_field.type_.to_rust(
+                        context,
+                        &format!("{}{}", prefix.to_camel_case(), alias.to_camel_case()),
+                    ),
+                    TargetLang::Go => schema_field.type_.to_go(
+                        context,
+                        &format!("{}{}", prefix.to_camel_case(), alias.to_camel_case()),
+                    ),
+                };
 
                 Ok(render_object_field(
+                    target_lang,
                     alias,
                     &ty,
                     schema_field.description.as_ref().cloned(),
@@ -188,8 +211,11 @@ pub(crate) fn response_fields_for_selection(
                 ))
             }
             SelectionItem::FragmentSpread(fragment) => {
-                let field_name =
-                    Ident::new(&fragment.fragment_name.to_snake_case(), Span::call_site());
+                let name = match target_lang {
+                    TargetLang::Rust => fragment.fragment_name.to_snake_case(),
+                    TargetLang::Go => fragment.fragment_name.to_camel_case(),
+                };
+                let field_name = Ident::new(&name, Span::call_site());
                 context.require_fragment(&fragment.fragment_name);
                 let fragment_from_context = context
                     .fragments
@@ -197,14 +223,22 @@ pub(crate) fn response_fields_for_selection(
                     .ok_or_else(|| format_err!("Unknown fragment: {}", &fragment.fragment_name))?;
                 let type_name = Ident::new(&fragment.fragment_name, Span::call_site());
                 let type_name = if fragment_from_context.is_recursive() {
-                    quote!(Box<#type_name>)
+                    match target_lang {
+                        TargetLang::Rust => quote!(Box<#type_name>),
+                        TargetLang::Go => quote!(*#type_name),
+                    }
                 } else {
                     quote!(#type_name)
                 };
-                Ok(Some(quote! {
-                    #[serde(flatten)]
-                    pub #field_name: #type_name
-                }))
+
+                let raw_name = Ident::new(fragment.fragment_name, Span::call_site());
+                match target_lang {
+                    TargetLang::Rust => Ok(Some(quote! {
+                        #[serde(flatten)]
+                        pub #field_name: #type_name
+                    })),
+                    TargetLang::Go => Ok(Some(quote!(#type_name))),
+                }
             }
             SelectionItem::InlineFragment(_) => Err(format_err!(
                 "unimplemented: inline fragment on object field"

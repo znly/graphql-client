@@ -1,5 +1,4 @@
-use crate::field_type::FieldType;
-use crate::query::QueryContext;
+use crate::{field_type::FieldType, query::QueryContext, TargetLang};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use std::collections::BTreeMap;
@@ -15,24 +14,42 @@ impl<'query> Variable<'query> {
     pub(crate) fn generate_default_value_constructor(
         &self,
         context: &QueryContext<'_, '_>,
+        target_lang: &TargetLang,
     ) -> Option<TokenStream> {
         context.schema.require(&self.ty.inner_name_str());
         match &self.default {
             Some(default) => {
-                let fn_name = Ident::new(&format!("default_{}", self.name), Span::call_site());
-                let ty = self.ty.to_rust(context, "");
+                let fn_name = match target_lang {
+                    TargetLang::Rust => format!("default_{}", self.name),
+                    TargetLang::Go => format!("Default{}", self.name),
+                };
+                let fn_name = Ident::new(&fn_name, Span::call_site());
+
+                let ty = match target_lang {
+                    TargetLang::Rust => self.ty.to_rust(context, ""),
+                    TargetLang::Go => self.ty.to_go(context, ""),
+                };
                 let value = graphql_parser_value_to_literal(
+                    target_lang,
                     default,
                     context,
                     &self.ty,
                     self.ty.is_optional(),
                 );
-                Some(quote! {
-                    pub fn #fn_name() -> #ty {
-                        #value
-                    }
+                match target_lang {
+                    TargetLang::Rust => Some(quote! {
+                        pub fn #fn_name() -> #ty {
+                            #value
+                        }
 
-                })
+                    }),
+                    TargetLang::Go => Some(quote! {
+                        pub fn #fn_name() -> #ty {
+                            #value
+                        }
+
+                    }),
+                }
             }
             None => None,
         }
@@ -52,6 +69,7 @@ impl<'query> std::convert::From<&'query graphql_parser::query::VariableDefinitio
 }
 
 fn graphql_parser_value_to_literal(
+    target_lang: &TargetLang,
     value: &graphql_parser::query::Value,
     context: &QueryContext<'_, '_>,
     ty: &FieldType<'_>,
@@ -67,7 +85,10 @@ fn graphql_parser_value_to_literal(
                 quote!(false)
             }
         }
-        Value::String(s) => quote!(#s.to_string()),
+        Value::String(s) => match target_lang {
+            TargetLang::Rust => quote!(#s.to_string()),
+            TargetLang::Go => quote!(string(#s)),
+        },
         Value::Variable(_) => panic!("variable in variable"),
         Value::Null => panic!("null as default value"),
         Value::Float(f) => quote!(#f),
@@ -79,24 +100,31 @@ fn graphql_parser_value_to_literal(
         Value::List(inner) => {
             let elements = inner
                 .iter()
-                .map(|val| graphql_parser_value_to_literal(val, context, ty, false));
-            quote! {
-                vec![
-                    #(#elements,)*
-                ]
+                .map(|val| graphql_parser_value_to_literal(target_lang, val, context, ty, false));
+            match target_lang {
+                TargetLang::Rust => quote! {
+                    vec![ #(#elements,)* ]
+                },
+                TargetLang::Go => quote! {
+                    []{#(#elements,)*}
+                },
             }
         }
-        Value::Object(obj) => render_object_literal(obj, ty, context),
+        Value::Object(obj) => render_object_literal(target_lang, obj, ty, context),
     };
 
     if is_optional {
-        quote!(Some(#inner))
+        match target_lang {
+            TargetLang::Rust => quote!(Some(#inner)),
+            TargetLang::Go => quote!(*#inner),
+        }
     } else {
         inner
     }
 }
 
 fn render_object_literal(
+    target_lang: &TargetLang,
     object: &BTreeMap<String, graphql_parser::query::Value>,
     ty: &FieldType<'_>,
     context: &QueryContext<'_, '_>,
@@ -117,6 +145,7 @@ fn render_object_literal(
             match provided_value {
                 Some(default_value) => {
                     let value = graphql_parser_value_to_literal(
+                        target_lang,
                         default_value,
                         context,
                         &field.type_,
@@ -124,12 +153,20 @@ fn render_object_literal(
                     );
                     quote!(#field_name: #value)
                 }
-                None => quote!(#field_name: None),
+                None => match target_lang {
+                    TargetLang::Rust => quote!(#field_name: None),
+                    TargetLang::Go => quote!(#field_name: nil),
+                },
             }
         })
         .collect();
 
-    quote!(#constructor {
-        #(#fields,)*
-    })
+    match target_lang {
+        TargetLang::Rust => quote!(#constructor {
+            #(#fields,)*
+        }),
+        TargetLang::Go => quote!(#constructor {
+            #(#fields;)*
+        }),
+    }
 }

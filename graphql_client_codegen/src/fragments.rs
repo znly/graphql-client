@@ -1,9 +1,9 @@
-use crate::query::QueryContext;
-use crate::selection::Selection;
+use crate::{query::QueryContext, selection::Selection, TargetLang};
 use proc_macro2::TokenStream;
 use std::cell::Cell;
 
-/// Represents which type a fragment is defined on. This is the type mentioned in the fragment's `on` clause.
+/// Represents which type a fragment is defined on. This is the type mentioned
+/// in the fragment's `on` clause.
 #[derive(Debug, PartialEq)]
 pub(crate) enum FragmentTarget<'context> {
     Object(&'context crate::objects::GqlObject<'context>),
@@ -24,7 +24,8 @@ impl<'context> FragmentTarget<'context> {
 /// Represents a fragment extracted from a query document.
 #[derive(Debug, PartialEq)]
 pub(crate) struct GqlFragment<'query> {
-    /// The name of the fragment, matching one-to-one with the name in the GraphQL query document.
+    /// The name of the fragment, matching one-to-one with the name in the
+    /// GraphQL query document.
     pub name: &'query str,
     /// The `on` clause of the fragment.
     pub on: FragmentTarget<'query>,
@@ -42,10 +43,31 @@ impl<'query> GqlFragment<'query> {
     ) -> Result<TokenStream, failure::Error> {
         match self.on {
             FragmentTarget::Object(obj) => {
-                obj.response_for_selection(context, &self.selection, &self.name)
+                obj.response_for_selection(&TargetLang::Rust, context, &self.selection, &self.name)
+            }
+            FragmentTarget::Interface(iface) => iface.response_for_selection(
+                &TargetLang::Rust,
+                context,
+                &self.selection,
+                &self.name,
+            ),
+            FragmentTarget::Union(_) => {
+                unreachable!("Wrong code path. Fragment on unions are treated differently.")
+            }
+        }
+    }
+
+    /// Generate all the Go code required by the fragment's object selection.
+    pub(crate) fn to_go(
+        &self,
+        context: &QueryContext<'_, '_>,
+    ) -> Result<TokenStream, failure::Error> {
+        match self.on {
+            FragmentTarget::Object(obj) => {
+                obj.response_for_selection(&TargetLang::Go, context, &self.selection, &self.name)
             }
             FragmentTarget::Interface(iface) => {
-                iface.response_for_selection(context, &self.selection, &self.name)
+                iface.response_for_selection(&TargetLang::Go, context, &self.selection, &self.name)
             }
             FragmentTarget::Union(_) => {
                 unreachable!("Wrong code path. Fragment on unions are treated differently.")

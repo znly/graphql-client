@@ -5,7 +5,7 @@ mod attributes;
 
 use failure::ResultExt;
 use graphql_client_codegen::{
-    generate_module_token_stream, CodegenMode, GraphQLClientCodegenOptions,
+    generate_module_token_stream, CodegenMode, GraphQLClientCodegenOptions, TargetLang,
 };
 use std::path::{Path, PathBuf};
 
@@ -35,7 +35,7 @@ fn graphql_query_derive_inner(
     let (query_path, schema_path) = build_query_and_schema_path(&ast)?;
     let options = build_graphql_client_derive_options(&ast, query_path.to_path_buf())?;
     Ok(
-        generate_module_token_stream(query_path, &schema_path, options)
+        generate_module_token_stream(&TargetLang::Rust, query_path, &schema_path, options)
             .map(Into::into)
             .context("Code generation failed.")?,
     )
@@ -63,7 +63,7 @@ fn build_graphql_client_derive_options(
 ) -> Result<GraphQLClientCodegenOptions, failure::Error> {
     let response_derives = attributes::extract_attr(input, "response_derives").ok();
 
-    let mut options = GraphQLClientCodegenOptions::new(CodegenMode::Derive);
+    let mut options = GraphQLClientCodegenOptions::new(CodegenMode::Derive, TargetLang::Rust);
     options.set_query_file(query_path);
 
     if let Some(response_derives) = response_derives {

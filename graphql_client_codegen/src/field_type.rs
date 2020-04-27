@@ -1,6 +1,4 @@
-use crate::enums::ENUMS_PREFIX;
-use crate::query::QueryContext;
-use crate::schema::DEFAULT_SCALARS;
+use crate::{enums::ENUMS_PREFIX, query::QueryContext, schema::DEFAULT_SCALARS};
 use graphql_introspection_query::introspection_response;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
@@ -19,8 +17,8 @@ pub struct FieldType<'a> {
     name: &'a str,
     /// An ordered list of qualifiers, from outer to inner.
     ///
-    /// e.g. `[Int]!` would have `vec![List, Optional]`, but `[Int!]` would have `vec![Optional,
-    /// List]`.
+    /// e.g. `[Int]!` would have `vec![List, Optional]`, but `[Int!]` would have
+    /// `vec![Optional, List]`.
     qualifiers: Vec<GraphqlTypeQualifier>,
 }
 
@@ -94,8 +92,9 @@ impl<'a> FieldType<'a> {
 
         let mut non_null = false;
 
-        // Note: we iterate over qualifiers in reverse because it is more intuitive. This
-        // means we start from the _inner_ type and make our way to the outside.
+        // Note: we iterate over qualifiers in reverse because it is more intuitive.
+        // This means we start from the _inner_ type and make our way to the
+        // outside.
         for qualifier in self.qualifiers.iter().rev() {
             match (non_null, qualifier) {
                 // We are in non-null context, and we wrap the non-null type into a list.
@@ -127,14 +126,89 @@ impl<'a> FieldType<'a> {
         qualified
     }
 
-    /// Return the innermost name - we mostly use this for looking types up in our Schema struct.
+    pub(crate) fn to_go(&self, context: &QueryContext<'_, '_>, prefix: &str) -> TokenStream {
+        let prefix: &str = if prefix.is_empty() {
+            self.inner_name_str()
+        } else {
+            prefix
+        };
+
+        let full_name = {
+            if context
+                .schema
+                .scalars
+                .get(&self.name)
+                .map(|s| s.is_required.set(true))
+                .is_some()
+                || DEFAULT_SCALARS.iter().any(|elem| elem == &self.name)
+            {
+                self.name.to_string()
+            } else if context
+                .schema
+                .enums
+                .get(&self.name)
+                .map(|enm| enm.is_required.set(true))
+                .is_some()
+            {
+                format!("{}{}", ENUMS_PREFIX, self.name)
+            } else {
+                if prefix.is_empty() {
+                    panic!("Empty prefix for {:?}", self);
+                }
+                prefix.to_string()
+            }
+        };
+
+        use heck::CamelCase;
+        let full_name = Ident::new(&full_name.to_camel_case(), Span::call_site());
+        let mut qualified = quote!(#full_name);
+
+        let mut non_null = false;
+
+        // Note: we iterate over qualifiers in reverse because it is more intuitive.
+        // This means we start from the _inner_ type and make our way to the
+        // outside.
+        for qualifier in self.qualifiers.iter().rev() {
+            match (non_null, qualifier) {
+                // We are in non-null context, and we wrap the non-null type into a list.
+                // We switch back to null context.
+                (true, GraphqlTypeQualifier::List) => {
+                    qualified = quote!([]#qualified);
+                    non_null = false;
+                }
+                // We are in nullable context, and we wrap the nullable type into a list.
+                (false, GraphqlTypeQualifier::List) => {
+                    qualified = quote!([]*#qualified);
+                }
+                // We are in non-nullable context, but we can't double require a type
+                // (!!).
+                (true, GraphqlTypeQualifier::Required) => panic!("double required annotation"),
+                // We are in nullable context, and we switch to non-nullable context.
+                (false, GraphqlTypeQualifier::Required) => {
+                    non_null = true;
+                }
+            }
+        }
+
+        // If we are in nullable context at the end of the iteration, we wrap the whole
+        // type with an Option.
+        if !non_null {
+            qualified = quote!(*#qualified);
+        }
+
+        qualified
+    }
+
+    /// Return the innermost name - we mostly use this for looking types up in
+    /// our Schema struct.
     pub fn inner_name_str(&self) -> &str {
         self.name
     }
 
     /// Is the type nullable?
     ///
-    /// Note: a list of nullable values is considered nullable only if the list itself is nullable.
+    /// Note: a list of nullable values is considered nullable only if the list
+    /// itself is nullable.
     pub fn is_optional(&self) -> bool {
         if let Some(qualifier) = self.qualifiers.get(0) {
             qualifier != &GraphqlTypeQualifier::Required
@@ -143,7 +217,8 @@ impl<'a> FieldType<'a> {
         }
     }
 
-    /// A type is indirected if it is a (flat or nested) list type, optional or not.
+    /// A type is indirected if it is a (flat or nested) list type, optional or
+    /// not.
     ///
     /// We use this to determine whether a type needs to be boxed for recursion.
     pub fn is_indirected(&self) -> bool {

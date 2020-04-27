@@ -35,10 +35,12 @@ enum Cli {
         schema_path: PathBuf,
         /// Path to the GraphQL query file.
         query_path: PathBuf,
-        /// Name of target query. If you don't set this parameter, cli generate all queries in query file.
+        /// Name of target query. If you don't set this parameter, cli generate
+        /// all queries in query file.
         #[structopt(long = "selected-operation")]
         selected_operation: Option<String>,
-        /// Additional derives that will be added to the generated structs and enums for the response and the variables.
+        /// Additional derives that will be added to the generated structs and
+        /// enums for the response and the variables.
         /// --additional-derives='Serialize,PartialEq'
         #[structopt(short = "a", long = "additional-derives")]
         additional_derives: Option<String>,
@@ -46,21 +48,27 @@ enum Cli {
         /// Default value is warn.
         #[structopt(short = "d", long = "deprecation-strategy")]
         deprecation_strategy: Option<String>,
-        /// If you don't want to execute rustfmt to generated code, set this option.
-        /// Default value is false.
+        /// If you don't want to execute rustfmt to generated code, set this
+        /// option. Default value is false.
         /// Formating feature is disabled as default installation.
         #[structopt(long = "no-formatting")]
         no_formatting: bool,
-        /// You can choose module and target struct visibility from pub and private.
-        /// Default value is pub.
+        /// You can choose module and target struct visibility from pub and
+        /// private. Default value is pub.
         #[structopt(short = "m", long = "module-visibility")]
         module_visibility: Option<String>,
         /// The directory in which the code will be generated.
         ///
-        /// If this option is omitted, the code will be generated next to the .graphql
-        /// file, with the same name and the .rs extension.
+        /// If this option is omitted, the code will be generated next to the
+        /// .graphql file, with the same name and the .rs extension.
         #[structopt(short = "o", long = "output-directory")]
         output_directory: Option<PathBuf>,
+        /// The target language.
+        ///
+        /// Can be either Rust (.rs) or Go (.go).
+        /// Defaults to Rust.
+        #[structopt(short = "t", long = "target-lang")]
+        target_lang: Option<graphql_client_codegen::TargetLang>,
     },
 }
 
@@ -84,6 +92,7 @@ fn main() -> Result<(), failure::Error> {
             query_path,
             schema_path,
             selected_operation,
+            target_lang,
         } => generate::generate_code(generate::CliCodegenParams {
             additional_derives,
             deprecation_strategy,
@@ -93,6 +102,7 @@ fn main() -> Result<(), failure::Error> {
             query_path,
             schema_path,
             selected_operation,
+            target_lang,
         }),
     }
 }

@@ -1,8 +1,8 @@
 use failure::format_err;
 use graphql_client::GraphQLQuery;
+use graphql_introspection_query::introspection_response::__TypeKind;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 #[derive(GraphQLQuery)]
 #[graphql(

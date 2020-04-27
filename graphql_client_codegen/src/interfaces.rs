@@ -1,25 +1,30 @@
-use crate::constants::TYPENAME_FIELD;
-use crate::objects::GqlObjectField;
-use crate::query::QueryContext;
-use crate::selection::{Selection, SelectionField, SelectionFragmentSpread, SelectionItem};
-use crate::shared::*;
-use crate::unions::union_variants;
+use crate::{
+    constants::TYPENAME_FIELD,
+    objects::GqlObjectField,
+    query::QueryContext,
+    selection::{Selection, SelectionField, SelectionFragmentSpread, SelectionItem},
+    shared::*,
+    unions::union_variants,
+    TargetLang,
+};
 use failure::*;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use std::cell::Cell;
-use std::collections::HashSet;
+use std::{cell::Cell, collections::HashSet};
 
 /// A GraphQL interface (simplified schema representation).
 ///
-/// In the generated code, fragments nesting is preserved, including for selection on union variants. See the tests in the graphql client crate for examples.
+/// In the generated code, fragments nesting is preserved, including for
+/// selection on union variants. See the tests in the graphql client crate for
+/// examples.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GqlInterface<'schema> {
     /// The documentation for the interface. Extracted from the schema.
     pub description: Option<&'schema str>,
     /// The set of object types implementing this interface.
     pub implemented_by: HashSet<&'schema str>,
-    /// The name of the interface. Should match 1-to-1 to its name in the GraphQL schema.
+    /// The name of the interface. Should match 1-to-1 to its name in the
+    /// GraphQL schema.
     pub name: &'schema str,
     /// The interface's fields. Analogous to object fields.
     pub fields: Vec<GqlObjectField<'schema>>,
@@ -27,9 +32,11 @@ pub struct GqlInterface<'schema> {
 }
 
 impl<'schema> GqlInterface<'schema> {
-    /// filters the selection to keep only the fields that refer to the interface's own.
+    /// filters the selection to keep only the fields that refer to the
+    /// interface's own.
     ///
-    /// This does not include the __typename field because it is translated into the `on` enum.
+    /// This does not include the __typename field because it is translated into
+    /// the `on` enum.
     fn object_selection<'query>(
         &self,
         selection: &'query Selection<'query>,
@@ -41,7 +48,8 @@ impl<'schema> GqlInterface<'schema> {
             .filter(|f| match f {
                 SelectionItem::Field(f) => f.name != TYPENAME_FIELD,
                 SelectionItem::FragmentSpread(SelectionFragmentSpread { fragment_name }) => {
-                    // only if the fragment refers to the interface’s own fields (to take into account type-refining fragments)
+                    // only if the fragment refers to the interface’s own fields (to take into
+                    // account type-refining fragments)
                     let fragment = query_context
                         .fragments
                         .get(fragment_name)
@@ -98,14 +106,17 @@ impl<'schema> GqlInterface<'schema> {
         }
     }
 
-    /// The generated code for each of the selected field's types. See [shared::field_impls_for_selection].
+    /// The generated code for each of the selected field's types. See
+    /// [shared::field_impls_for_selection].
     pub(crate) fn field_impls_for_selection(
         &self,
+        target_lang: &TargetLang,
         context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
     ) -> Result<Vec<TokenStream>, failure::Error> {
         crate::shared::field_impls_for_selection(
+            target_lang,
             &self.fields,
             context,
             &self.object_selection(selection, context),
@@ -116,11 +127,13 @@ impl<'schema> GqlInterface<'schema> {
     /// The code for the interface's corresponding struct's fields.
     pub(crate) fn response_fields_for_selection(
         &self,
+        target_lang: &TargetLang,
         context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
     ) -> Result<Vec<TokenStream>, failure::Error> {
         response_fields_for_selection(
+            target_lang,
             &self.name,
             &self.fields,
             context,
@@ -132,6 +145,7 @@ impl<'schema> GqlInterface<'schema> {
     /// Generate all the code for the interface.
     pub(crate) fn response_for_selection(
         &self,
+        target_lang: &TargetLang,
         query_context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
@@ -148,14 +162,20 @@ impl<'schema> GqlInterface<'schema> {
         })?;
 
         let object_fields =
-            self.response_fields_for_selection(query_context, &selection, prefix)?;
+            self.response_fields_for_selection(target_lang, query_context, &selection, prefix)?;
 
-        let object_children = self.field_impls_for_selection(query_context, &selection, prefix)?;
+        let object_children =
+            self.field_impls_for_selection(target_lang, query_context, &selection, prefix)?;
 
         let union_selection = self.union_selection(&selection, &query_context);
 
-        let (mut union_variants, union_children, used_variants) =
-            union_variants(&union_selection, query_context, prefix, &self.name)?;
+        let (mut union_variants, union_children, used_variants) = union_variants(
+            target_lang,
+            &union_selection,
+            query_context,
+            prefix,
+            &self.name,
+        )?;
 
         // Add the non-selected variants to the generated enum's variants.
         union_variants.extend(
@@ -184,20 +204,24 @@ impl<'schema> GqlInterface<'schema> {
                 (None, None)
             };
 
-        Ok(quote! {
+        match target_lang {
+            TargetLang::Rust => Ok(quote! {
 
-            #(#object_children)*
+                #(#object_children)*
 
-            #(#union_children)*
+                #(#union_children)*
 
-            #attached_enum
+                #attached_enum
 
-            #derives
-            pub struct #name {
-                #(#object_fields,)*
-                #last_object_field
+                #derives
+                pub struct #name {
+                    #(#object_fields,)*
+                    #last_object_field
+                }
             }
-        })
+            .into()),
+            TargetLang::Go => unimplemented!(),
+        }
     }
 }
 

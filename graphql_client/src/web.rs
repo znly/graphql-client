@@ -55,7 +55,8 @@ pub enum ClientError {
 }
 
 impl Client {
-    /// Initialize a client. The `endpoint` parameter is the URI of the GraphQL API.
+    /// Initialize a client. The `endpoint` parameter is the URI of the GraphQL
+    /// API.
     pub fn new<Endpoint>(endpoint: Endpoint) -> Client
     where
         Endpoint: Into<String>,
@@ -66,13 +67,13 @@ impl Client {
         }
     }
 
-    /// Add a header to those sent with the requests. Can be used for things like authorization.
+    /// Add a header to those sent with the requests. Can be used for things
+    /// like authorization.
     pub fn add_header(&mut self, name: &str, value: &str) {
         self.headers.insert(name.into(), value.into());
     }
 
     /// Perform a query.
-    ///
     // Lint disabled: We can pass by value because it's always an empty struct.
     #[allow(clippy::needless_pass_by_value)]
     pub fn call<Q: GraphQLQuery + 'static>(

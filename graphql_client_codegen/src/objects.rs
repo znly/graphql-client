@@ -1,10 +1,13 @@
-use crate::constants::*;
-use crate::deprecation::DeprecationStatus;
-use crate::field_type::FieldType;
-use crate::query::QueryContext;
-use crate::schema::Schema;
-use crate::selection::*;
-use crate::shared::{field_impls_for_selection, response_fields_for_selection};
+use crate::{
+    constants::*,
+    deprecation::DeprecationStatus,
+    field_type::FieldType,
+    query::QueryContext,
+    schema::Schema,
+    selection::*,
+    shared::{field_impls_for_selection, response_fields_for_selection},
+    TargetLang,
+};
 use graphql_parser::schema;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
@@ -119,50 +122,72 @@ impl<'schema> GqlObject<'schema> {
 
     pub(crate) fn response_for_selection(
         &self,
+        target_lang: &TargetLang,
         query_context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
     ) -> Result<TokenStream, failure::Error> {
         let derives = query_context.response_derives();
         let name = Ident::new(prefix, Span::call_site());
-        let fields = self.response_fields_for_selection(query_context, selection, prefix)?;
-        let field_impls = self.field_impls_for_selection(query_context, selection, &prefix)?;
+        let fields =
+            self.response_fields_for_selection(target_lang, query_context, selection, prefix)?;
+        let field_impls =
+            self.field_impls_for_selection(target_lang, query_context, selection, &prefix)?;
         let description = self.description.as_ref().map(|desc| quote!(#[doc = #desc]));
-        Ok(quote! {
-            #(#field_impls)*
 
-            #derives
-            #description
-            pub struct #name {
-                #(#fields,)*
+        match target_lang {
+            TargetLang::Rust => Ok(quote! {
+                #(#field_impls)*
+
+                #derives
+                #description
+                pub struct #name {
+                    #(#fields,)*
+                }
             }
-        })
+            .into()),
+            TargetLang::Go => Ok(quote! {
+                #(#field_impls;)*
+
+                type #name struct {
+                    #(#fields;)*
+                }
+            }),
+        }
     }
 
     pub(crate) fn field_impls_for_selection(
         &self,
+        target_lang: &TargetLang,
         query_context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
     ) -> Result<Vec<TokenStream>, failure::Error> {
-        field_impls_for_selection(&self.fields, query_context, selection, prefix)
+        field_impls_for_selection(target_lang, &self.fields, query_context, selection, prefix)
     }
 
     pub(crate) fn response_fields_for_selection(
         &self,
+        target_lang: &TargetLang,
         query_context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
     ) -> Result<Vec<TokenStream>, failure::Error> {
-        response_fields_for_selection(&self.name, &self.fields, query_context, selection, prefix)
+        response_fields_for_selection(
+            target_lang,
+            &self.name,
+            &self.fields,
+            query_context,
+            selection,
+            prefix,
+        )
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use graphql_parser::query;
-    use graphql_parser::Pos;
+    use graphql_parser::{query, Pos};
 
     fn mock_field(directives: Vec<schema::Directive>) -> schema::Field {
         schema::Field {

@@ -1,18 +1,21 @@
-use crate::deprecation::DeprecationStatus;
-use crate::enums::{EnumVariant, GqlEnum};
-use crate::field_type::FieldType;
-use crate::inputs::GqlInput;
-use crate::interfaces::GqlInterface;
-use crate::objects::{GqlObject, GqlObjectField};
-use crate::scalars::Scalar;
-use crate::unions::GqlUnion;
+use crate::{
+    deprecation::DeprecationStatus,
+    enums::{EnumVariant, GqlEnum},
+    field_type::FieldType,
+    inputs::GqlInput,
+    interfaces::GqlInterface,
+    objects::{GqlObject, GqlObjectField},
+    scalars::Scalar,
+    unions::GqlUnion,
+};
 use failure::*;
 use graphql_parser::{self, schema};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) const DEFAULT_SCALARS: &[&str] = &["ID", "String", "Int", "Float", "Boolean"];
 
-/// Intermediate representation for a parsed GraphQL schema used during code generation.
+/// Intermediate representation for a parsed GraphQL schema used during code
+/// generation.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Schema<'schema> {
     pub(crate) enums: BTreeMap<&'schema str, GqlEnum<'schema>>,
@@ -109,8 +112,9 @@ impl<'schema> std::convert::From<&'schema graphql_parser::schema::Document> for 
     fn from(ast: &'schema graphql_parser::schema::Document) -> Schema<'schema> {
         let mut schema = Schema::new();
 
-        // Holds which objects implement which interfaces so we can populate GqlInterface#implemented_by later.
-        // It maps interface names to a vec of implementation names.
+        // Holds which objects implement which interfaces so we can populate
+        // GqlInterface#implemented_by later. It maps interface names to a vec
+        // of implementation names.
         let mut interface_implementations: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
 
         for definition in &ast.definitions {
@@ -240,8 +244,9 @@ impl<'schema>
             .and_then(|ty| ty.name.as_ref())
             .map(String::as_str);
 
-        // Holds which objects implement which interfaces so we can populate GqlInterface#implemented_by later.
-        // It maps interface names to a vec of implementation names.
+        // Holds which objects implement which interfaces so we can populate
+        // GqlInterface#implemented_by later. It maps interface names to a vec
+        // of implementation names.
         let mut interface_implementations: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
 
         for ty in root

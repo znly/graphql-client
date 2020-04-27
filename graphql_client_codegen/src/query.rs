@@ -1,10 +1,9 @@
-use crate::deprecation::DeprecationStrategy;
-use crate::fragments::GqlFragment;
-use crate::schema::Schema;
-use crate::selection::Selection;
+use crate::{
+    deprecation::DeprecationStrategy, fragments::GqlFragment, schema::Schema, selection::Selection,
+    TargetLang,
+};
 use failure::*;
-use proc_macro2::Span;
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use std::collections::{BTreeMap, BTreeSet};
 use syn::Ident;
@@ -55,6 +54,7 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
     /// Expand the deserialization data structures for the given field.
     pub(crate) fn maybe_expand_field(
         &self,
+        target_lang: &TargetLang,
         ty: &str,
         selection: &Selection<'_>,
         prefix: &str,
@@ -66,16 +66,16 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
             Ok(None) // we already expand enums separately
         } else if let Some(obj) = self.schema.objects.get(ty) {
             obj.is_required.set(true);
-            obj.response_for_selection(self, &selection, prefix)
+            obj.response_for_selection(target_lang, self, &selection, prefix)
                 .map(Some)
         } else if let Some(iface) = self.schema.interfaces.get(ty) {
             iface.is_required.set(true);
             iface
-                .response_for_selection(self, &selection, prefix)
+                .response_for_selection(target_lang, self, &selection, prefix)
                 .map(Some)
         } else if let Some(unn) = self.schema.unions.get(ty) {
             unn.is_required.set(true);
-            unn.response_for_selection(self, &selection, prefix)
+            unn.response_for_selection(target_lang, self, &selection, prefix)
                 .map(Some)
         } else {
             Err(format_err!("Unknown type: {}", ty))

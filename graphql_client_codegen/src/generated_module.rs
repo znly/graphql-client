@@ -1,9 +1,10 @@
-use crate::codegen_options::*;
+use crate::{codegen_options::*, TargetLang};
 use heck::*;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 
-/// This struct contains the parameters necessary to generate code for a given operation.
+/// This struct contains the parameters necessary to generate code for a given
+/// operation.
 pub(crate) struct GeneratedModule<'a> {
     pub operation: &'a crate::operations::Operation<'a>,
     pub query_string: &'a str,
@@ -13,7 +14,8 @@ pub(crate) struct GeneratedModule<'a> {
 }
 
 impl<'a> GeneratedModule<'a> {
-    /// Generate the items for the variables and the response that will go inside the module.
+    /// Generate the items for the variables and the response that will go
+    /// inside the module.
     fn build_impls(&self) -> Result<TokenStream, failure::Error> {
         Ok(crate::codegen::response_for_query(
             &self.schema,
@@ -24,7 +26,10 @@ impl<'a> GeneratedModule<'a> {
     }
 
     /// Generate the module and all the code inside.
-    pub(crate) fn to_token_stream(&self) -> Result<TokenStream, failure::Error> {
+    pub(crate) fn to_token_stream(
+        &self,
+        target_lang: &TargetLang,
+    ) -> Result<TokenStream, failure::Error> {
         let module_name = Ident::new(&self.operation.name.to_snake_case(), Span::call_site());
         let module_visibility = &self.options.module_visibility();
         let operation_name_literal = &self.operation.name;
@@ -54,38 +59,73 @@ impl<'a> GeneratedModule<'a> {
         let impls = self.build_impls()?;
 
         let struct_declaration: Option<_> = match self.options.mode {
-            CodegenMode::Cli => Some(quote!(#module_visibility struct #operation_name_ident;)),
+            CodegenMode::Cli => match target_lang {
+                TargetLang::Rust => Some(quote!(#module_visibility struct #operation_name_ident;)),
+                TargetLang::Go => Some(quote!(type #operation_name_ident struct{})),
+            },
+
             // The struct is already present in derive mode.
             CodegenMode::Derive => None,
         };
 
-        Ok(quote!(
-            #struct_declaration
+        match target_lang {
+            TargetLang::Rust => Ok(quote!(
+                #struct_declaration
 
-            #module_visibility mod #module_name {
-                #![allow(dead_code)]
+                #module_visibility mod #module_name {
+                    #![allow(dead_code)]
 
-                pub const OPERATION_NAME: &'static str = #operation_name_literal;
-                pub const QUERY: &'static str = #query_string;
+                    pub const OPERATION_NAME: &'static str = #operation_name_literal;
+                    pub const QUERY: &'static str = #query_string;
 
+                    #query_include
+
+                    #impls
+                }
+
+                impl graphql_client::GraphQLQuery for #operation_name_ident {
+                    type Variables = #module_name::Variables;
+                    type ResponseData = #module_name::ResponseData;
+
+                    fn build_query(variables: Self::Variables) -> ::graphql_client::QueryBody<Self::Variables> {
+                        graphql_client::QueryBody {
+                            variables,
+                            query: #module_name::QUERY,
+                            operation_name: #module_name::OPERATION_NAME,
+                        }
+
+                    }
+                }
+            )),
+            TargetLang::Go => Ok(quote!(
                 #query_include
 
+                package #module_name;
+
+                #struct_declaration;
+
                 #impls
-            }
 
-            impl graphql_client::GraphQLQuery for #operation_name_ident {
-                type Variables = #module_name::Variables;
-                type ResponseData = #module_name::ResponseData;
+                type Query struct {
+                    Vars Variables __JSON_TAGS(variables);
+                    Query string __JSON_TAGS(query);
+                    OperationName string __JSON_TAGS(operationName);
+                };
+                func (q *Query) MarshalGQL() (buf []byte, err error) {
+                    buf, err = json.Marshal(q);
+                    return buf, errors.WithStack(err);
+                };
 
-                fn build_query(variables: Self::Variables) -> ::graphql_client::QueryBody<Self::Variables> {
-                    graphql_client::QueryBody {
-                        variables,
-                        query: #module_name::QUERY,
-                        operation_name: #module_name::OPERATION_NAME,
-                    }
-
-                }
-            }
-        ))
+                func NewQuery(vars Variables) Query {
+                    const OPERATION_NAME = #operation_name_literal;
+                    const QUERY = #query_string;
+                    return Query {
+                        Vars: vars,
+                        Query: QUERY,
+                        OperationName: OPERATION_NAME,
+                    };
+                };
+            )),
+        }
     }
 }

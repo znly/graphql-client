@@ -100,7 +100,8 @@ impl<'query> Selection<'query> {
                         .get(fragment_name)
                         .ok_or_else(|| format_err!("Unknown fragment: {}", &fragment_name))?;
 
-                    // The fragment can either be on the union/interface itself, or on one of its variants (type-refining fragment).
+                    // The fragment can either be on the union/interface itself, or on one of its
+                    // variants (type-refining fragment).
                     if fragment.on.name() == selection_on {
                         // The fragment is on the union/interface itself.
                         fragment.selection.selected_variants_on_union_inner(
@@ -126,9 +127,12 @@ impl<'query> Selection<'query> {
         Ok(())
     }
 
-    /// This method should only be invoked on selections on union and interface fields. It returns a map from the name of the selected variants to the corresponding selections.
+    /// This method should only be invoked on selections on union and interface
+    /// fields. It returns a map from the name of the selected variants to the
+    /// corresponding selections.
     ///
-    /// Importantly, it will "flatten" the fragments and handle multiple selections of the same variant.
+    /// Importantly, it will "flatten" the fragments and handle multiple
+    /// selections of the same variant.
     ///
     /// The `context` argument is required so we can expand the fragments.
     pub(crate) fn selected_variants_on_union<'s>(
@@ -206,8 +210,8 @@ impl<'query> std::convert::From<&'query SelectionSet> for Selection<'query> {
 }
 
 impl<'a, 'query> std::iter::IntoIterator for &'a Selection<'query> {
-    type Item = &'a SelectionItem<'query>;
     type IntoIter = std::slice::Iter<'a, SelectionItem<'query>>;
+    type Item = &'a SelectionItem<'query>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.iter()

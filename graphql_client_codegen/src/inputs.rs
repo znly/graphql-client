@@ -1,13 +1,11 @@
-use crate::deprecation::DeprecationStatus;
-use crate::objects::GqlObjectField;
-use crate::query::QueryContext;
-use crate::schema::Schema;
+use crate::{
+    deprecation::DeprecationStatus, objects::GqlObjectField, query::QueryContext, schema::Schema,
+};
 use graphql_introspection_query::introspection_response;
 use heck::SnakeCase;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use std::cell::Cell;
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap};
 
 /// Represents an input object type from a GraphQL schema
 #[derive(Debug, Clone, PartialEq)]
@@ -34,7 +32,8 @@ impl<'schema> GqlInput<'schema> {
         context: &QueryContext<'_, '_>,
         type_name: &str,
     ) -> bool {
-        // the input type is recursive if any of its members contains it, without indirection
+        // the input type is recursive if any of its members contains it, without
+        // indirection
         self.fields.values().any(|field| {
             // the field is indirected, so no boxing is needed
             if field.type_.is_indirected() {
@@ -98,8 +97,9 @@ impl<'schema> GqlInput<'schema> {
         });
         let variables_derives = context.variables_derives();
 
-        // Prevent generated code like "pub struct crate" for a schema input like "input crate { ... }"
-        // This works in tandem with renamed struct Variables field types, eg: pub struct Variables { pub criteria : crate_ , }
+        // Prevent generated code like "pub struct crate" for a schema input like "input
+        // crate { ... }" This works in tandem with renamed struct Variables
+        // field types, eg: pub struct Variables { pub criteria : crate_ , }
         let name = crate::shared::keyword_replace(&self.name);
         #[cfg(feature = "normalize_query_types")]
         let name = {
@@ -112,6 +112,40 @@ impl<'schema> GqlInput<'schema> {
             #variables_derives
             pub struct #name {
                 #(#fields,)*
+            }
+        })
+    }
+
+    pub(crate) fn to_go(
+        &self,
+        context: &QueryContext<'_, '_>,
+    ) -> Result<TokenStream, failure::Error> {
+        use heck::CamelCase;
+
+        let mut fields: Vec<&GqlObjectField<'_>> = self.fields.values().collect();
+        fields.sort_unstable_by(|a, b| a.name.cmp(&b.name));
+        let fields = fields.iter().map(|field| {
+            let ty = field.type_.to_go(&context, "");
+
+            let ty = if let Some(input) = context.schema.inputs.get(field.type_.inner_name_str()) {
+                if input.is_recursive_without_indirection(context) {
+                    quote! { *#ty }
+                } else {
+                    quote!(#ty)
+                }
+            } else {
+                quote!(#ty)
+            };
+
+            let name = Ident::new(&field.name.to_camel_case(), Span::call_site());
+            let raw_name = Ident::new(&field.name, Span::call_site());
+            quote!(#name #ty __JSON_TAGS(#raw_name))
+        });
+
+        let name = Ident::new(&self.name.to_camel_case(), Span::call_site());
+        Ok(quote! {
+            type #name struct {
+                #(#fields;)*
             }
         })
     }
@@ -187,8 +221,7 @@ impl<'schema> std::convert::From<&'schema introspection_response::FullType> for 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::*;
-    use crate::field_type::FieldType;
+    use crate::{constants::*, field_type::FieldType};
 
     #[test]
     fn gql_input_to_rust() {

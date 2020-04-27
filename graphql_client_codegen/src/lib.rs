@@ -1,7 +1,5 @@
 #![recursion_limit = "128"]
-#![deny(missing_docs)]
 #![deny(rust_2018_idioms)]
-#![deny(warnings)]
 
 //! Crate for internal use by other graphql-client crates, for code generation.
 //!
@@ -38,7 +36,7 @@ mod variables;
 #[cfg(test)]
 mod tests;
 
-pub use crate::codegen_options::{CodegenMode, GraphQLClientCodegenOptions};
+pub use crate::codegen_options::{CodegenMode, GraphQLClientCodegenOptions, TargetLang};
 
 use std::collections::HashMap;
 
@@ -50,8 +48,9 @@ lazy_static! {
         CacheMap::default();
 }
 
-/// Generates Rust code given a query document, a schema and options.
+/// Generates code given a query document, a schema and options.
 pub fn generate_module_token_stream(
+    target_lang: &TargetLang,
     query_path: std::path::PathBuf,
     schema_path: &std::path::Path,
     options: GraphQLClientCodegenOptions,
@@ -65,12 +64,14 @@ pub fn generate_module_token_stream(
             hash_map::Entry::Vacant(v) => {
                 let query_string = read_file(v.key())?;
                 let query = graphql_parser::parse_query(&query_string)?;
+
                 v.insert((query_string, query)).clone()
             }
         }
     };
 
-    // Determine which operation we are generating code for. This will be used in operationName.
+    // Determine which operation we are generating code for. This will be used in
+    // operationName.
     let operations = options
         .operation_name
         .as_ref()
@@ -119,6 +120,35 @@ pub fn generate_module_token_stream(
 
     let schema = schema::Schema::from(&parsed_schema);
 
+    for p in &query.definitions {
+        use graphql_parser::query::{
+            Definition::Operation,
+            OperationDefinition::{Mutation, Query, Subscription},
+        };
+        let variable_definitions: &[_] = match p {
+            Operation(Query(q)) => &q.variable_definitions,
+            Operation(Mutation(m)) => &m.variable_definitions,
+            Operation(Subscription(s)) => &s.variable_definitions,
+            _ => &[],
+        };
+        for v in variable_definitions {
+            let mut t = v.var_type.clone();
+            loop {
+                use graphql_parser::query::Type;
+                match t {
+                    Type::NamedType(name) => {
+                        schema
+                            .enums
+                            .get(&*name)
+                            .map(|enm| enm.is_required.set(true));
+                        break;
+                    }
+                    Type::ListType(v) => t = *v,
+                    Type::NonNullType(v) => t = *v,
+                }
+            }
+        }
+    }
     // The generated modules.
     let mut modules = Vec::with_capacity(operations.len());
 
@@ -130,7 +160,7 @@ pub fn generate_module_token_stream(
             operation,
             options: &options,
         }
-        .to_token_stream()?;
+        .to_token_stream(target_lang)?;
         modules.push(generated);
     }
 
@@ -140,8 +170,7 @@ pub fn generate_module_token_stream(
 }
 
 fn read_file(path: &std::path::Path) -> Result<String, failure::Error> {
-    use std::fs;
-    use std::io::prelude::*;
+    use std::{fs, io::prelude::*};
 
     let mut out = String::new();
     let mut file = fs::File::open(path).map_err(|io_err| {
@@ -158,7 +187,8 @@ fn read_file(path: &std::path::Path) -> Result<String, failure::Error> {
     Ok(out)
 }
 
-/// In derive mode, build an error when the operation with the same name as the struct is not found.
+/// In derive mode, build an error when the operation with the same name as the
+/// struct is not found.
 fn derive_operation_not_found_error(
     ident: Option<&proc_macro2::Ident>,
     query: &graphql_parser::query::Document,

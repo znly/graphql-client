@@ -1,14 +1,14 @@
-use crate::query::QueryContext;
-use crate::selection::Selection;
+use crate::{query::QueryContext, selection::Selection, TargetLang};
 use failure::*;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use std::cell::Cell;
-use std::collections::BTreeSet;
+use std::{cell::Cell, collections::BTreeSet};
 
 /// A GraphQL union (simplified schema representation).
 ///
-/// For code generation purposes, unions will "flatten" fragment spreads, so there is only one enum for the selection. See the tests in the graphql_client crate for examples.
+/// For code generation purposes, unions will "flatten" fragment spreads, so
+/// there is only one enum for the selection. See the tests in the
+/// graphql_client crate for examples.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct GqlUnion<'schema> {
     pub name: &'schema str,
@@ -31,10 +31,13 @@ type UnionVariantResult<'selection> =
 
 /// Returns a triple.
 ///
-/// - The first element is the union variants to be inserted directly into the `enum` declaration.
+/// - The first element is the union variants to be inserted directly into the
+///   `enum` declaration.
 /// - The second is the structs for each variant's sub-selection
-/// - The last one contains which fields have been selected on the union, so we can make the enum exhaustive by complementing with those missing.
+/// - The last one contains which fields have been selected on the union, so we
+///   can make the enum exhaustive by complementing with those missing.
 pub(crate) fn union_variants<'selection>(
+    target_lang: &TargetLang,
     selection: &'selection Selection<'_>,
     context: &'selection QueryContext<'selection, 'selection>,
     prefix: &str,
@@ -57,17 +60,17 @@ pub(crate) fn union_variants<'selection>(
             .schema
             .objects
             .get(on)
-            .map(|_f| context.maybe_expand_field(&on, fields, &new_prefix));
+            .map(|_f| context.maybe_expand_field(target_lang, &on, fields, &new_prefix));
         let field_interface = context
             .schema
             .interfaces
             .get(on)
-            .map(|_f| context.maybe_expand_field(&on, fields, &new_prefix));
+            .map(|_f| context.maybe_expand_field(target_lang, &on, fields, &new_prefix));
         let field_union_type = context
             .schema
             .unions
             .get(on)
-            .map(|_f| context.maybe_expand_field(&on, fields, &new_prefix));
+            .map(|_f| context.maybe_expand_field(target_lang, &on, fields, &new_prefix));
 
         match field_object_type.or(field_interface).or(field_union_type) {
             Some(Ok(Some(tokens))) => children_definitions.push(tokens),
@@ -76,8 +79,9 @@ pub(crate) fn union_variants<'selection>(
             None => Err(UnionError::UnknownType { ty: on.to_string() })?,
         };
 
-        variants.push(quote! {
-            #variant_name(#variant_type)
+        variants.push(match target_lang {
+            TargetLang::Rust => quote! { #variant_name(#variant_type) },
+            TargetLang::Go => unimplemented!(),
         })
     }
 
@@ -85,9 +89,11 @@ pub(crate) fn union_variants<'selection>(
 }
 
 impl<'schema> GqlUnion<'schema> {
-    /// Returns the code to deserialize this union in the response given the query selection.
+    /// Returns the code to deserialize this union in the response given the
+    /// query selection.
     pub(crate) fn response_for_selection(
         &self,
+        target_lang: &TargetLang,
         query_context: &QueryContext<'_, '_>,
         selection: &Selection<'_>,
         prefix: &str,
@@ -104,7 +110,7 @@ impl<'schema> GqlUnion<'schema> {
         let derives = query_context.response_derives();
 
         let (mut variants, children_definitions, used_variants) =
-            union_variants(selection, query_context, prefix, &self.name)?;
+            union_variants(target_lang, selection, query_context, prefix, &self.name)?;
 
         variants.extend(
             self.variants
@@ -112,30 +118,35 @@ impl<'schema> GqlUnion<'schema> {
                 .filter(|v| used_variants.iter().find(|a| a == v).is_none())
                 .map(|v| {
                     let v = Ident::new(v, Span::call_site());
-                    quote!(#v)
+                    quote!(#v).into()
                 }),
         );
 
-        Ok(quote! {
-            #(#children_definitions)*
+        match target_lang {
+            TargetLang::Rust => Ok(quote! {
+                #(#children_definitions)*
 
-            #derives
-            #[serde(tag = "__typename")]
-            pub enum #struct_name {
-                #(#variants),*
-            }
-        })
+                #derives
+                #[serde(tag = "__typename")]
+                pub enum #struct_name {
+                    #(#variants),*
+                }
+            }),
+            TargetLang::Go => unimplemented!(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::constants::*;
-    use crate::deprecation::DeprecationStatus;
-    use crate::field_type::FieldType;
-    use crate::objects::{GqlObject, GqlObjectField};
-    use crate::selection::*;
+    use crate::{
+        constants::*,
+        deprecation::DeprecationStatus,
+        field_type::FieldType,
+        objects::{GqlObject, GqlObjectField},
+        selection::*,
+    };
 
     #[test]
     fn union_response_for_selection_complains_if_typename_is_missing() {
