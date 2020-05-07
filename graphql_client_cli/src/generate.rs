@@ -30,6 +30,7 @@ pub(crate) fn generate_code(params: CliCodegenParams) -> Result<()> {
         query_path,
         schema_path,
         selected_operation,
+        serde_crate,
     } = params;
 
     let deprecation_strategy = deprecation_strategy.as_ref().and_then(|s| s.parse().ok());
@@ -59,7 +60,12 @@ pub(crate) fn generate_code(params: CliCodegenParams) -> Result<()> {
         options.set_deprecation_strategy(deprecation_strategy);
     }
 
-    let gen = generate_module_token_stream(query_path.clone(), &schema_path, options).map_err(|fail| fail.compat())?;
+    if let Some(serde_crate) = serde_crate {
+        options.set_serde_crate(serde_crate);
+    }
+
+    let gen = generate_module_token_stream(query_path.clone(), &schema_path, options)
+        .map_err(|fail| fail.compat())?;
 
     let generated_code = gen.to_string();
     let generated_code = if cfg!(feature = "rustfmt") && !no_formatting {

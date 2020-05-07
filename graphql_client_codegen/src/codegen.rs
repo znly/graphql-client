@@ -45,6 +45,7 @@ pub(crate) fn response_for_query(
         schema,
         options.deprecation_strategy(),
         options.normalization(),
+        options.serde_crate().map(|c| c.clone()),
     );
 
     if let Some(derives) = options.variables_derives() {
