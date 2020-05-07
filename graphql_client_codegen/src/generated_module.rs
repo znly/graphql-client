@@ -58,7 +58,7 @@ impl<'a> GeneratedModule<'a> {
         let serde_use = self
             .options
             .serde_crate()
-            .map(|path| quote!(use #path as serde))
+            .map(|path| quote!(use #path as serde;))
             .unwrap_or_default();
 
         Ok(quote!(
@@ -72,7 +72,7 @@ impl<'a> GeneratedModule<'a> {
 
                 #query_include
 
-                #serde_use;
+                #serde_use
                 #impls
             }
 
