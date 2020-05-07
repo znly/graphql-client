@@ -8,7 +8,7 @@ use proc_macro2::Span;
 use proc_macro2::TokenStream;
 use quote::quote;
 use std::collections::{BTreeMap, BTreeSet};
-use syn::Ident;
+use syn::{Ident, Path};
 
 /// This holds all the information we need during the code generation phase.
 pub(crate) struct QueryContext<'query, 'schema: 'query> {
@@ -18,6 +18,7 @@ pub(crate) struct QueryContext<'query, 'schema: 'query> {
     pub normalization: Normalization,
     variables_derives: Vec<Ident>,
     response_derives: Vec<Ident>,
+    serde_crate_path: Option<Path>,
 }
 
 impl<'query, 'schema> QueryContext<'query, 'schema> {
@@ -26,12 +27,14 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
         schema: &'schema Schema<'schema>,
         deprecation_strategy: DeprecationStrategy,
         normalization: Normalization,
+        serde_crate_path: Option<Path>,
     ) -> QueryContext<'query, 'schema> {
         QueryContext {
             fragments: BTreeMap::new(),
             schema,
             deprecation_strategy,
             normalization,
+            serde_crate_path,
             variables_derives: vec![Ident::new("Serialize", Span::call_site())],
             response_derives: vec![Ident::new("Deserialize", Span::call_site())],
         }
@@ -52,6 +55,7 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
             schema,
             deprecation_strategy: DeprecationStrategy::Allow,
             normalization: Normalization::None,
+            serde_crate_path: None,
             variables_derives: vec![Ident::new("Serialize", Span::call_site())],
             response_derives: vec![Ident::new("Deserialize", Span::call_site())],
         }
@@ -128,17 +132,22 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
     pub(crate) fn variables_derives(&self) -> TokenStream {
         let derives: BTreeSet<&Ident> = self.variables_derives.iter().collect();
         let derives = derives.iter();
+        let serde_crate_attr = self.serde_crate_attr();
 
         quote! {
             #[derive( #(#derives),* )]
+            #serde_crate_attr
         }
     }
 
     pub(crate) fn response_derives(&self) -> TokenStream {
         let derives: BTreeSet<&Ident> = self.response_derives.iter().collect();
         let derives = derives.iter();
+        let serde_crate_attr = self.serde_crate_attr();
+
         quote! {
             #[derive( #(#derives),* )]
+            #serde_crate_attr
         }
     }
 
@@ -160,6 +169,16 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
         quote! {
             #[derive( #(#enum_derives),* )]
         }
+    }
+
+    fn serde_crate_attr(&self) -> TokenStream {
+        self.serde_crate_path
+            .as_ref()
+            .map(|path| {
+                let path_str = quote!(#path).to_string();
+                quote! { #[serde(crate = #path_str)] }
+            })
+            .unwrap_or_default()
     }
 }
 

@@ -4,6 +4,7 @@ use graphql_client_codegen::normalization::Normalization;
 
 const DEPRECATION_ERROR: &str = "deprecated must be one of 'allow', 'deny', or 'warn'";
 const NORMALIZATION_ERROR: &str = "normalization must be one of 'none' or 'rust'";
+const SERDE_CRATE_ERROR: &str = "serde_crate must be a valid path to serde";
 
 /// The `graphql` attribute as a `syn::Path`.
 fn path_to_match() -> syn::Path {
@@ -52,6 +53,13 @@ pub fn extract_normalization(ast: &syn::DeriveInput) -> Result<Normalization> {
         .as_str()
         .parse()
         .map_err(|_| format_err!("{}", NORMALIZATION_ERROR))
+}
+
+/// Get the serde crate from a struct attribute in the derive case.
+pub fn extract_serde_crate(ast: &syn::DeriveInput) -> Result<syn::Path> {
+    let serde_crate_attr = extract_attr(&ast, "serde_crate")?;
+    syn::parse_str::<syn::Path>(&*serde_crate_attr)
+        .map_err(|_| format_err!("{}", SERDE_CRATE_ERROR))
 }
 
 #[cfg(test)]

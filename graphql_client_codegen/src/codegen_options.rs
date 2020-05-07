@@ -39,6 +39,9 @@ pub struct GraphQLClientCodegenOptions {
     schema_file: Option<PathBuf>,
     /// Normalization pattern for query types and names.
     normalization: Normalization,
+    /// Path to the serde we use for derive impls.
+    /// It is equivallent to the like the #[serde(crate = "...")] attribute
+    serde_crate: Option<syn::Path>,
 }
 
 impl GraphQLClientCodegenOptions {
@@ -56,6 +59,7 @@ impl GraphQLClientCodegenOptions {
             query_file: Default::default(),
             schema_file: Default::default(),
             normalization: Normalization::None,
+            serde_crate: Default::default(),
         }
     }
 
@@ -148,5 +152,15 @@ impl GraphQLClientCodegenOptions {
     /// The normalization mode for the generated code.
     pub fn normalization(&self) -> Normalization {
         self.normalization
+    }
+
+    /// Set the path to the serde we use for derive impls.
+    pub fn set_serde_crate(&mut self, serde_crate: syn::Path) {
+        self.serde_crate = serde_crate.into();
+    }
+
+    /// Path to the serde we use for derive impls.
+    pub fn serde_crate(&self) -> Option<&syn::Path> {
+        self.serde_crate.as_ref()
     }
 }

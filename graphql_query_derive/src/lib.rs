@@ -56,6 +56,7 @@ fn build_graphql_client_derive_options(
 ) -> Result<GraphQLClientCodegenOptions, anyhow::Error> {
     let variables_derives = attributes::extract_attr(input, "variables_derives").ok();
     let response_derives = attributes::extract_attr(input, "response_derives").ok();
+    let serde_crate = attributes::extract_serde_crate(input).ok();
 
     let mut options = GraphQLClientCodegenOptions::new(CodegenMode::Derive);
     options.set_query_file(query_path);
@@ -67,6 +68,10 @@ fn build_graphql_client_derive_options(
     if let Some(response_derives) = response_derives {
         options.set_response_derives(response_derives);
     };
+
+    if let Some(serde_crate) = serde_crate {
+        options.set_serde_crate(serde_crate);
+    }
 
     // The user can determine what to do about deprecations.
     if let Ok(deprecation_strategy) = attributes::extract_deprecation_strategy(input) {

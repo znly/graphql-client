@@ -55,6 +55,12 @@ impl<'a> GeneratedModule<'a> {
             CodegenMode::Derive => None,
         };
 
+        let serde_use = self
+            .options
+            .serde_crate()
+            .map(|path| quote!(use #path as serde))
+            .unwrap_or_default();
+
         Ok(quote!(
             #struct_declaration
 
@@ -66,6 +72,7 @@ impl<'a> GeneratedModule<'a> {
 
                 #query_include
 
+                #serde_use;
                 #impls
             }
 
