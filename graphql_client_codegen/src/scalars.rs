@@ -1,3 +1,4 @@
+use heck::CamelCase;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use std::cell::Cell;
@@ -26,7 +27,7 @@ impl<'schema> Scalar<'schema> {
     }
 
     pub fn to_go(&self) -> TokenStream {
-        let from = Ident::new(&self.name, Span::call_site());
+        let from = Ident::new(&self.name.to_camel_case(), Span::call_site());
 
         match self.name {
             "Duration" => quote! {
@@ -59,9 +60,11 @@ impl<'schema> Scalar<'schema> {
                     return nil;
                 }
             },
-            "Timezone" => quote! {
-                type #from String
-            },
+            "Timezone" | "UserUID" | "IconID" => {
+                quote! {
+                    type #from String
+                }
+            }
             "DateTimeUtc" => quote! {
                 type #from time.Time;
 

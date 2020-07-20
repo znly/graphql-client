@@ -123,9 +123,11 @@ impl<'schema> GqlInput<'schema> {
         use heck::CamelCase;
 
         let mut fields: Vec<&GqlObjectField<'_>> = self.fields.values().collect();
+
         fields.sort_unstable_by(|a, b| a.name.cmp(&b.name));
         let fields = fields.iter().map(|field| {
             let ty = field.type_.to_go(&context, "");
+            context.schema.require(&field.type_.inner_name_str());
 
             let ty = if let Some(input) = context.schema.inputs.get(field.type_.inner_name_str()) {
                 if input.is_recursive_without_indirection(context) {

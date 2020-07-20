@@ -174,16 +174,18 @@ mod go {
         )?;
 
         use regex::Regex;
+        let re = Regex::new(r#"__JSON_TAGS_WITHOUT_OMIT \( (?P<fieldname>\w+) \)"#).unwrap();
+        let contents = re
+            .replace_all(&generated_code.to_string(), r##"`json:"$fieldname"`"##)
+            .to_string();
+
         let re = Regex::new(r#"__JSON_TAGS \( (?P<fieldname>\w+) \)"#).unwrap();
         let contents = re
-            .replace_all(
-                &generated_code.to_string(),
-                r##"`json:"$fieldname,omitempty"`"##,
-            )
+            .replace_all(&contents, r##"`json:"$fieldname,omitempty"`"##)
             .to_string();
 
         for s in contents.split("package").skip(1) {
-            let file = s.split(';').nth(0).unwrap().trim().to_string();
+            let file = s.split(';').next().unwrap().trim().to_string();
             let dest_file_path: PathBuf = lang_options
                 .output_dir
                 .as_ref()
