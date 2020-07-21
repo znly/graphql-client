@@ -60,12 +60,17 @@ impl<'schema> Scalar<'schema> {
                     return nil;
                 }
             },
-            "Timezone" | "UserUID" | "IconID" => {
+            "Timezone" | "UserUID" | "IconID" | "PhoneNumberClear" | "FriendRequestUID" => {
                 quote! {
                     type #from String
                 }
             }
-            "DateTimeUtc" => quote! {
+            "PhoneNumberHashed" => {
+                quote! {
+                    type #from [32]uint8
+                }
+            }
+            "DateTimeUtc" | "Time" => quote! {
                 type #from time.Time;
 
                 func (d *#from) UnmarshalJSON(payload []byte) error {
