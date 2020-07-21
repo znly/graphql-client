@@ -190,6 +190,7 @@ pub(crate) fn response_fields_for_selection(
                         )
                     })?;
 
+                context.schema.require(schema_field.type_.inner_name_str());
                 let ty = match target_lang {
                     TargetLang::Rust => schema_field.type_.to_rust(
                         context,
@@ -231,7 +232,6 @@ pub(crate) fn response_fields_for_selection(
                     quote!(#type_name)
                 };
 
-                let raw_name = Ident::new(fragment.fragment_name, Span::call_site());
                 match target_lang {
                     TargetLang::Rust => Ok(Some(quote! {
                         #[serde(flatten)]

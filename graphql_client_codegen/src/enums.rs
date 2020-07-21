@@ -112,7 +112,10 @@ impl<'schema> GqlEnum<'schema> {
         let name_ident = format!("{}{}", ENUMS_PREFIX, self.name);
         let name_ident = Ident::new(&name_ident, Span::call_site());
         let variants = self.variants.iter().map(|v| {
-            let i = Ident::new(v.name, Span::call_site());
+            let i = Ident::new(
+                &format!("{}_{}", self.name.to_uppercase(), v.name),
+                Span::call_site(),
+            );
             let name = v.name;
             quote!(#i #name_ident = #name)
         });

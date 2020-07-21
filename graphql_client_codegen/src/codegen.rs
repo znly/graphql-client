@@ -140,15 +140,6 @@ pub(crate) fn response_for_query(
         .collect();
     let input_object_definitions = input_object_definitions?;
 
-    let enum_definitions: Vec<TokenStream> = context
-        .schema
-        .enums
-        .values()
-        .map(|enm| match options.target_lang {
-            TargetLang::Rust => enm.to_rust(&context),
-            TargetLang::Go => enm.to_go(&context),
-        })
-        .collect();
     let fragment_definitions: Result<Vec<TokenStream>, _> = context
         .fragments
         .values()
@@ -185,6 +176,22 @@ pub(crate) fn response_for_query(
         .collect();
 
     let response_derives = context.response_derives();
+
+    let enum_definitions: Vec<TokenStream> = context
+        .schema
+        .enums
+        .values()
+        .filter_map(|enm| {
+            if enm.is_required.get() {
+                Some(match options.target_lang {
+                    TargetLang::Rust => enm.to_rust(&context),
+                    TargetLang::Go => enm.to_go(&context),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
 
     match options.target_lang {
         TargetLang::Rust => Ok(quote! {

@@ -70,6 +70,7 @@ impl<'query> Operation<'query> {
         let fields: Vec<TokenStream> = variables
             .iter()
             .map(|variable| {
+                context.schema.require(variable.ty.inner_name_str());
                 let ty = match target_lang {
                     TargetLang::Rust => variable.ty.to_rust(context, ""),
                     TargetLang::Go => variable.ty.to_go(context, ""),
