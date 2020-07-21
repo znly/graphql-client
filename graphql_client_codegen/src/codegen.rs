@@ -122,6 +122,8 @@ pub(crate) fn response_for_query(
             &prefix,
         )?
     };
+    let variables_struct =
+        operation.expand_variables(&context, &options.target_lang, &operation.operation_type);
 
     let input_object_definitions: Result<Vec<TokenStream>, _> = context
         .schema
@@ -155,9 +157,6 @@ pub(crate) fn response_for_query(
         })
         .collect();
     let fragment_definitions = fragment_definitions?;
-
-    let variables_struct =
-        operation.expand_variables(&context, &options.target_lang, &operation.operation_type);
 
     let scalar_definitions: Vec<TokenStream> = context
         .schema
