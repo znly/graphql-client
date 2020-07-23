@@ -1,5 +1,6 @@
 use crate::{
-    deprecation::DeprecationStatus, objects::GqlObjectField, query::QueryContext, schema::Schema,
+    deprecation::DeprecationStatus, objects::GqlObjectField, operations::OperationType,
+    query::QueryContext, schema::Schema,
 };
 use graphql_introspection_query::introspection_response;
 use heck::SnakeCase;
@@ -141,7 +142,10 @@ impl<'schema> GqlInput<'schema> {
 
             let name = Ident::new(&field.name.to_camel_case(), Span::call_site());
             let raw_name = Ident::new(&field.name, Span::call_site());
-            quote!(#name #ty __JSON_TAGS(#raw_name))
+            match context.operation_type {
+                OperationType::Mutation => quote!(#name #ty __JSON_TAGS_WITHOUT_OMIT(#raw_name)),
+                _ => quote!(#name #ty __JSON_TAGS(#raw_name)),
+            }
         });
 
         let name = Ident::new(&self.name.to_camel_case(), Span::call_site());

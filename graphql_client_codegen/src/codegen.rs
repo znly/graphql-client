@@ -55,7 +55,11 @@ pub(crate) fn response_for_query(
     operation: &Operation<'_>,
     options: &crate::GraphQLClientCodegenOptions,
 ) -> Result<TokenStream, failure::Error> {
-    let mut context = QueryContext::new(schema, options.deprecation_strategy());
+    let mut context = QueryContext::new(
+        schema,
+        options.deprecation_strategy(),
+        operation.operation_type,
+    );
 
     if let Some(derives) = options.additional_derives() {
         context.ingest_additional_derives(&derives)?;

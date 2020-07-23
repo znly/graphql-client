@@ -1,6 +1,6 @@
 use crate::{
-    deprecation::DeprecationStrategy, fragments::GqlFragment, schema::Schema, selection::Selection,
-    TargetLang,
+    deprecation::DeprecationStrategy, fragments::GqlFragment, operations::OperationType,
+    schema::Schema, selection::Selection, TargetLang,
 };
 use failure::*;
 use proc_macro2::{Span, TokenStream};
@@ -13,6 +13,7 @@ pub(crate) struct QueryContext<'query, 'schema: 'query> {
     pub fragments: BTreeMap<&'query str, GqlFragment<'query>>,
     pub schema: &'schema Schema<'schema>,
     pub deprecation_strategy: DeprecationStrategy,
+    pub operation_type: OperationType,
     variables_derives: Vec<Ident>,
     response_derives: Vec<Ident>,
 }
@@ -22,6 +23,7 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
     pub(crate) fn new(
         schema: &'schema Schema<'schema>,
         deprecation_strategy: DeprecationStrategy,
+        operation_type: OperationType,
     ) -> QueryContext<'query, 'schema> {
         QueryContext {
             fragments: BTreeMap::new(),
@@ -29,6 +31,7 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
             deprecation_strategy,
             variables_derives: vec![Ident::new("Serialize", Span::call_site())],
             response_derives: vec![Ident::new("Deserialize", Span::call_site())],
+            operation_type,
         }
     }
 
@@ -48,6 +51,7 @@ impl<'query, 'schema> QueryContext<'query, 'schema> {
             deprecation_strategy: DeprecationStrategy::Allow,
             variables_derives: vec![Ident::new("Serialize", Span::call_site())],
             response_derives: vec![Ident::new("Deserialize", Span::call_site())],
+            operation_type: OperationType::Query,
         }
     }
 
