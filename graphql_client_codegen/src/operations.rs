@@ -7,7 +7,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::Ident;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum OperationType {
     Query,
     Mutation,
@@ -46,6 +46,7 @@ impl<'query> Operation<'query> {
         &self,
         context: &QueryContext<'_, '_>,
         target_lang: &TargetLang,
+        operation_type: &OperationType,
     ) -> TokenStream {
         let variables = &self.variables;
         let variables_derives = context.variables_derives();
@@ -69,6 +70,7 @@ impl<'query> Operation<'query> {
         let fields: Vec<TokenStream> = variables
             .iter()
             .map(|variable| {
+                context.schema.require(variable.ty.inner_name_str());
                 let ty = match target_lang {
                     TargetLang::Rust => variable.ty.to_rust(context, ""),
                     TargetLang::Go => variable.ty.to_go(context, ""),
@@ -86,7 +88,12 @@ impl<'query> Operation<'query> {
                 let raw_name = Ident::new(&variable.name, Span::call_site());
                 match target_lang {
                     TargetLang::Rust => quote!(#rename pub #name: #ty),
-                    TargetLang::Go => quote!(#name #ty __JSON_TAGS(#raw_name)),
+                    TargetLang::Go => match operation_type {
+                        OperationType::Mutation => {
+                            quote!(#name #ty __JSON_TAGS_WITHOUT_OMIT(#raw_name))
+                        }
+                        _ => quote!(#name #ty __JSON_TAGS(#raw_name)),
+                    },
                 }
             })
             .collect();

@@ -55,7 +55,11 @@ pub(crate) fn response_for_query(
     operation: &Operation<'_>,
     options: &crate::GraphQLClientCodegenOptions,
 ) -> Result<TokenStream, failure::Error> {
-    let mut context = QueryContext::new(schema, options.deprecation_strategy());
+    let mut context = QueryContext::new(
+        schema,
+        options.deprecation_strategy(),
+        operation.operation_type,
+    );
 
     if let Some(derives) = options.additional_derives() {
         context.ingest_additional_derives(&derives)?;
@@ -122,39 +126,8 @@ pub(crate) fn response_for_query(
             &prefix,
         )?
     };
-
-    let enum_definitions: Vec<TokenStream> = context
-        .schema
-        .enums
-        .values()
-        .filter_map(|enm| {
-            if enm.is_required.get() {
-                Some(match options.target_lang {
-                    TargetLang::Rust => enm.to_rust(&context),
-                    TargetLang::Go => enm.to_go(&context),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    let fragment_definitions: Result<Vec<TokenStream>, _> = context
-        .fragments
-        .values()
-        .filter_map(|fragment| {
-            if fragment.is_required.get() {
-                Some(match options.target_lang {
-                    TargetLang::Rust => fragment.to_rust(&context),
-                    TargetLang::Go => fragment.to_go(&context),
-                })
-            } else {
-                None
-            }
-        })
-        .collect();
-    let fragment_definitions = fragment_definitions?;
-
-    let variables_struct = operation.expand_variables(&context, &options.target_lang);
+    let variables_struct =
+        operation.expand_variables(&context, &options.target_lang, &operation.operation_type);
 
     let input_object_definitions: Result<Vec<TokenStream>, _> = context
         .schema
@@ -173,6 +146,22 @@ pub(crate) fn response_for_query(
         .collect();
     let input_object_definitions = input_object_definitions?;
 
+    let fragment_definitions: Result<Vec<TokenStream>, _> = context
+        .fragments
+        .values()
+        .filter_map(|fragment| {
+            if fragment.is_required.get() {
+                Some(match options.target_lang {
+                    TargetLang::Rust => fragment.to_rust(&context),
+                    TargetLang::Go => fragment.to_go(&context),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    let fragment_definitions = fragment_definitions?;
+
     let scalar_definitions: Vec<TokenStream> = context
         .schema
         .scalars
@@ -190,6 +179,22 @@ pub(crate) fn response_for_query(
         .collect();
 
     let response_derives = context.response_derives();
+
+    let enum_definitions: Vec<TokenStream> = context
+        .schema
+        .enums
+        .values()
+        .filter_map(|enm| {
+            if enm.is_required.get() {
+                Some(match options.target_lang {
+                    TargetLang::Rust => enm.to_rust(&context),
+                    TargetLang::Go => enm.to_go(&context),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
 
     match options.target_lang {
         TargetLang::Rust => Ok(quote! {
@@ -245,7 +250,7 @@ pub(crate) fn response_for_query(
                 #(#response_data_fields;)*
             };
             func (resp *ResponseData) UnmarshalGQL(buf []byte) error {
-                return errors.WithStack(json.Unmarshal(buf, resp));
+                return errors.WithStack(resp.UnmarshalJSON(buf));
             };
         }),
     }
