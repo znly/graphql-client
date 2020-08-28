@@ -29,6 +29,7 @@ impl<'schema> Scalar<'schema> {
     pub fn to_go(&self) -> TokenStream {
         let from = Ident::new(&self.name.to_camel_case(), Span::call_site());
 
+        dbg!(&self.name);
         match self.name {
             "Duration" => quote! {
                 type #from time.Duration;
@@ -60,9 +61,29 @@ impl<'schema> Scalar<'schema> {
                     return nil;
                 }
             },
+            "BubbleID" => quote! {
+                type #from uint64;
+
+                func (d *#from) UnmarshalJSON(payload []byte) error {
+                    var val uint64;
+                    var err error;
+
+                    val, err = strconv.ParseUint(string(payload), 10, 64);
+                    if err != nil {
+                        return err;
+                    };
+                    *d = #from(val);
+                    return nil;
+                }
+            },
             "Timezone" | "UserUID" | "IconID" | "PhoneNumberClear" | "FriendRequestUID" => {
                 quote! {
                     type #from String
+                }
+            }
+            "Meter" | "PerUserPlaceID" => {
+                quote! {
+                    type #from uint32
                 }
             }
             "PhoneNumberHashed" => {
