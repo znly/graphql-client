@@ -72,7 +72,7 @@ impl<'schema> GqlEnum<'schema> {
             }
 
             impl serde::Serialize for #name {
-                fn serialize<S: serde::Serializer>(&self, ser: S) -> serde::export::Result<S::Ok, S::Error> {
+                fn serialize<S: serde::Serializer>(&self, ser: S) -> std::result::Result<S::Ok, S::Error> {
                     ser.serialize_str(match *self {
                         #(#constructors => #variant_str,)*
                         #name::Other(ref s) => &s,
@@ -81,7 +81,7 @@ impl<'schema> GqlEnum<'schema> {
             }
 
             impl<'de> serde::Deserialize<'de> for #name {
-                fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> serde::export::Result<Self, D::Error> {
+                fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
                     let s = <String>::deserialize(deserializer)?;
 
                     match s.as_str() {
