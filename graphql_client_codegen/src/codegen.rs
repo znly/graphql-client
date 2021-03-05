@@ -49,7 +49,7 @@ pub(crate) fn response_for_query(
         #[allow(dead_code)]
         type Boolean = bool;
         #[allow(dead_code)]
-        type Float = f64;
+        type Float = super::Float;
         #[allow(dead_code)]
         type Int = i64;
         #[allow(dead_code)]
