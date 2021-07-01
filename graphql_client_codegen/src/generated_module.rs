@@ -99,13 +99,49 @@ impl<'a> GeneratedModule<'a> {
                 type ResponseData = #module_name::ResponseData;
 
                 fn build_query(variables: Self::Variables) -> ::graphql_client::QueryBody<Self::Variables> {
+                    #[cfg(feature = "apq")]
+                    use sha2::{Sha256, Digest};
+
                     graphql_client::QueryBody {
                         variables,
                         query: #module_name::QUERY,
                         operation_name: #module_name::OPERATION_NAME,
+                        extensions: ::graphql_client::Extensions {
+                                #[cfg(feature = "apq")]
+                                persisted_query: vec![
+                                    ("version".to_string(), 1.into()),
+                                    (
+                                        "sha256Hash".to_string(),
+                                        format!("{:x}", Sha256::digest(#module_name::QUERY.as_bytes())).into(),
+                                    ),
+                                ]
+                                .into_iter()
+                                .collect(),
+                            }
                     }
-
                 }
+
+                #[cfg(feature = "apq")]
+                fn build_apq_query(variables: Self::Variables) -> ::graphql_client::APQQueryBody<Self::Variables> {
+                    use sha2::{Sha256, Digest};
+
+                    graphql_client::APQQueryBody {
+                        variables,
+                        operation_name: #module_name::OPERATION_NAME,
+                        extensions: ::graphql_client::Extensions {
+                                persisted_query: vec![
+                                    ("version".to_string(), 1.into()),
+                                    (
+                                        "sha256Hash".to_string(),
+                                        format!("{:x}", Sha256::digest(#module_name::QUERY.as_bytes())).into(),
+                                    ),
+                                ]
+                                .into_iter()
+                                .collect(),
+                            }
+                    }
+                }
+
             }
         ))
     }

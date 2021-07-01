@@ -93,6 +93,7 @@ use graphql_client::GraphQLQuery;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/unions/union_schema.graphql",
     query_path = "tests/unions/union_query.graphql",
     response_derives = "Serialize,PartialEq",
@@ -141,6 +142,7 @@ use graphql_client::GraphQLQuery;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/unions/union_schema.graphql",
     query_path = "tests/unions/union_query.graphql",
 )]

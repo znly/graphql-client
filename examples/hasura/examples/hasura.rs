@@ -7,6 +7,7 @@ type Timestamptz = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "examples/schema.graphql",
     query_path = "examples/query_1.graphql",
     response_derives = "Debug",

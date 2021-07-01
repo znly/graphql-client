@@ -2,6 +2,7 @@ use graphql_client::*;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/deprecation/schema.graphql",
     query_path = "tests/deprecation/query.graphql",
     deprecated = "allow"
@@ -10,6 +11,7 @@ pub struct AllowDeprecation;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/deprecation/schema.graphql",
     query_path = "tests/deprecation/query.graphql",
     deprecated = "deny"
@@ -18,6 +20,7 @@ pub struct DenyDeprecation;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/deprecation/schema.graphql",
     query_path = "tests/deprecation/query.graphql",
     deprecated = "warn"

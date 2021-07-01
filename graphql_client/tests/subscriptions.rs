@@ -13,6 +13,7 @@ const RESPONSE: &str = include_str!("subscription/subscription_query_response.js
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/subscription/subscription_schema.graphql",
     query_path = "tests/subscription/subscription_query.graphql",
     response_derives = "Debug, PartialEq"

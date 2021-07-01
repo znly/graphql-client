@@ -28,6 +28,7 @@ pub enum DistanceUnit {
 // Minimal setup using extern enum.
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/extern_enums/schema.graphql",
     query_path = "tests/extern_enums/single_extern_enum_query.graphql",
     extern_enums("DistanceUnit")
@@ -37,6 +38,7 @@ pub struct SingleExternEnumQuery;
 // Tests using multiple externally defined enums. Also covers mixing with derived traits and with nullable GraphQL enum values.
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/extern_enums/schema.graphql",
     query_path = "tests/extern_enums/multiple_extern_enums_query.graphql",
     response_derives = "Debug, PartialEq",

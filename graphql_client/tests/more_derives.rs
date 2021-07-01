@@ -2,6 +2,7 @@ use graphql_client::*;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/more_derives/schema.graphql",
     query_path = "tests/more_derives/query.graphql",
     response_derives = "Debug, PartialEq, PartialOrd"

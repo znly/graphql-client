@@ -8,6 +8,7 @@ use wasm_bindgen_futures::future_to_promise;
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "schema.json",
     query_path = "examples/puppy_smiles.graphql",
     response_derives = "Debug"

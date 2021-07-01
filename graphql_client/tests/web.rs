@@ -14,6 +14,7 @@ fn build_client() {
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/countries_schema.json",
     query_path = "tests/Germany.graphql",
     response_derives = "Debug"
@@ -40,6 +41,7 @@ async fn test_germany() {
 
 #[derive(GraphQLQuery)]
 #[graphql(
+    normalization = "rust",
     schema_path = "tests/countries_schema.json",
     query_path = "tests/Germany.graphql"
 )]

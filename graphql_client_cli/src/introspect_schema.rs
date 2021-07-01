@@ -1,8 +1,12 @@
 use anyhow::*;
+use graphql_client::Extensions;
 use graphql_client::GraphQLQuery;
 use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, CONTENT_TYPE};
 use std::path::PathBuf;
 use std::str::FromStr;
+
+#[cfg(feature = "apq")]
+use sha2::{Digest, Sha256};
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -32,6 +36,22 @@ pub fn introspect_schema(
         variables: (),
         query: introspection_query::QUERY,
         operation_name: introspection_query::OPERATION_NAME,
+        extensions: Extensions {
+            #[cfg(feature = "apq")]
+            persisted_query: vec![
+                ("version".to_string(), 1.into()),
+                (
+                    "sha256Hash".to_string(),
+                    format!(
+                        "{:x}",
+                        Sha256::digest(introspection_query::QUERY.as_bytes())
+                    )
+                    .into(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        },
     };
 
     let client = reqwest::blocking::Client::builder()
