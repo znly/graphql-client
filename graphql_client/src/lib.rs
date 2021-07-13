@@ -55,13 +55,7 @@ use std::fmt::{self, Display};
 ///         episode_for_hero: star_wars_query::Episode::NEWHOPE,
 ///     };
 ///
-///     let expected_body = json!({
-///         "operationName": star_wars_query::OPERATION_NAME,
-///         "query": star_wars_query::QUERY,
-///         "variables": {
-///             "episodeForHero": "NEWHOPE"
-///         },
-///     });
+///     let expected_body = get_expected_body();
 ///
 ///     let actual_body = serde_json::to_value(
 ///         StarWarsQuery::build_query(variables)
@@ -70,6 +64,34 @@ use std::fmt::{self, Display};
 ///     assert_eq!(actual_body, expected_body);
 ///
 ///     Ok(())
+/// }
+///
+/// #[cfg(not(feature = "apq"))]
+/// fn get_expected_body() -> serde_json::Value {
+///    json!({
+///         "operationName": star_wars_query::OPERATION_NAME,
+///         "query": star_wars_query::QUERY,
+///         "variables": {
+///             "episodeForHero": "NEWHOPE"
+///         },
+///     })
+/// }
+///
+/// #[cfg(feature = "apq")]
+/// fn get_expected_body() -> serde_json::Value {
+///    json!({
+///         "operationName": star_wars_query::OPERATION_NAME,
+///         "query": star_wars_query::QUERY,
+///         "variables": {
+///             "episodeForHero": "NEWHOPE"
+///         },
+///         "extensions": {
+///             "persistedQuery": {
+///                 "sha256Hash": "dd1290afe67d6bdd21d7df10c901b3ef06b66336a1c82e3e2a21ffc6909ec223",
+///                 "version": 1
+///             }
+///         }
+///     })
 /// }
 /// ```
 pub trait GraphQLQuery {
@@ -85,7 +107,6 @@ pub trait GraphQLQuery {
 /// The various suported extensions for the query, aupporting Automatic Persisted Queries for now.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Extensions {
-    #[cfg(feature = "apq")]
     #[serde(rename = "persistedQuery")]
     /// The automatic persisted queries version and hash
     pub persisted_query: HashMap<String, serde_json::Value>,
@@ -103,19 +124,6 @@ pub struct QueryBody<Variables> {
     pub operation_name: &'static str,
     /// The various suported extensions for the query
     #[cfg(feature = "apq")]
-    pub extensions: Extensions,
-}
-
-/// The form in which queries are sent over HTTP in most implementations. This will be built using the [`GraphQLQuery`] trait normally.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct APQQueryBody<Variables> {
-    /// The values for the variables. They must match those declared in the queries. This should be the `Variables` struct from the generated module corresponding to the query.
-    pub variables: Variables,
-    /// The GraphQL operation name, as a string.
-    #[serde(rename = "operationName")]
-    pub operation_name: &'static str,
-    #[cfg(feature = "apq")]
-    /// The various suported extensions for the query
     pub extensions: Extensions,
 }
 

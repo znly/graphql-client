@@ -118,7 +118,7 @@ impl<'a> GeneratedModule<'a> {
                                     ("version".to_string(), 1.into()),
                                     (
                                         "sha256Hash".to_string(),
-                                        #module_name::APQ_HASH,
+                                        #module_name::APQ_HASH.into(),
                                     ).into(),
                                 ]
                                 .into_iter()

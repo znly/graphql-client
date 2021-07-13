@@ -36,7 +36,10 @@ pub fn introspect_schema(
         extensions: graphql_client::Extensions {
             persisted_query: vec![
                 ("version".to_string(), 1.into()),
-                ("sha256Hash".to_string(), introspection_query::APQ_HASH),
+                (
+                    "sha256Hash".to_string(),
+                    introspection_query::APQ_HASH.into(),
+                ),
             ]
             .into_iter()
             .collect(),
