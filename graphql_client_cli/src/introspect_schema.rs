@@ -33,7 +33,7 @@ pub fn introspect_schema(
         query: introspection_query::QUERY,
         operation_name: introspection_query::OPERATION_NAME,
         #[cfg(feature = "apq")]
-        extensions: Extensions {
+        extensions: graphql_client::Extensions {
             persisted_query: vec![
                 ("version".to_string(), 1.into()),
                 ("sha256Hash".to_string(), introspection_query::APQ_HASH),
