@@ -84,6 +84,8 @@ impl<'a> GeneratedModule<'a> {
             CodegenMode::Derive => None,
         };
 
+        let apq_hash = get_apq_hash(query_string);
+
         Ok(quote!(
             #struct_declaration
 
@@ -94,6 +96,7 @@ impl<'a> GeneratedModule<'a> {
 
                 pub const OPERATION_NAME: &str = #operation_name;
                 pub const QUERY: &str = #query_string;
+                pub const APQ_HASH: &str = #apq_hash;
 
                 #query_include
 
@@ -109,10 +112,32 @@ impl<'a> GeneratedModule<'a> {
                         variables,
                         query: #module_name::QUERY,
                         operation_name: #module_name::OPERATION_NAME,
+                        #[cfg(feature = "apq")]
+                        extensions: ::graphql_client::Extensions {
+                                persisted_query: vec![
+                                    ("version".to_string(), 1.into()),
+                                    (
+                                        "sha256Hash".to_string(),
+                                        #module_name::APQ_HASH,
+                                    ).into(),
+                                ]
+                                .into_iter()
+                                .collect(),
+                            }
                     }
-
                 }
             }
         ))
     }
+}
+
+#[cfg(feature = "apq")]
+fn get_apq_hash(query_string: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(query_string.as_bytes()))
+}
+
+#[cfg(not(feature = "apq"))]
+fn get_apq_hash(_: &str) -> String {
+    Default::default()
 }

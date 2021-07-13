@@ -32,6 +32,15 @@ pub fn introspect_schema(
         variables: (),
         query: introspection_query::QUERY,
         operation_name: introspection_query::OPERATION_NAME,
+        #[cfg(feature = "apq")]
+        extensions: Extensions {
+            persisted_query: vec![
+                ("version".to_string(), 1.into()),
+                ("sha256Hash".to_string(), introspection_query::APQ_HASH),
+            ]
+            .into_iter()
+            .collect(),
+        },
     };
 
     let client = reqwest::blocking::Client::builder()

@@ -20,5 +20,6 @@ graphql_query_derive = { path = "../graphql_query_derive", version = "0.10.0", o
 reqwest = { version = "^0.11", features = ["json"], optional = true }
 
 [features]
+apq = ["graphql_query_derive/apq"]
 default = ["graphql_query_derive"]
 reqwest-blocking = ["reqwest/blocking"]

@@ -82,6 +82,15 @@ pub trait GraphQLQuery {
     fn build_query(variables: Self::Variables) -> QueryBody<Self::Variables>;
 }
 
+/// The various suported extensions for the query, aupporting Automatic Persisted Queries for now.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Extensions {
+    #[cfg(feature = "apq")]
+    #[serde(rename = "persistedQuery")]
+    /// The automatic persisted queries version and hash
+    pub persisted_query: HashMap<String, serde_json::Value>,
+}
+
 /// The form in which queries are sent over HTTP in most implementations. This will be built using the [`GraphQLQuery`] trait normally.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QueryBody<Variables> {
@@ -92,6 +101,22 @@ pub struct QueryBody<Variables> {
     /// The GraphQL operation name, as a string.
     #[serde(rename = "operationName")]
     pub operation_name: &'static str,
+    /// The various suported extensions for the query
+    #[cfg(feature = "apq")]
+    pub extensions: Extensions,
+}
+
+/// The form in which queries are sent over HTTP in most implementations. This will be built using the [`GraphQLQuery`] trait normally.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct APQQueryBody<Variables> {
+    /// The values for the variables. They must match those declared in the queries. This should be the `Variables` struct from the generated module corresponding to the query.
+    pub variables: Variables,
+    /// The GraphQL operation name, as a string.
+    #[serde(rename = "operationName")]
+    pub operation_name: &'static str,
+    #[cfg(feature = "apq")]
+    /// The various suported extensions for the query
+    pub extensions: Extensions,
 }
 
 /// Represents a location inside a query string. Used in errors. See [`Error`].
